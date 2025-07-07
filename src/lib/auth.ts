@@ -5,40 +5,32 @@ import { auth as adminAuth } from './firebase'; // Use our firebase admin instan
 import type { DecodedIdToken } from 'firebase-admin/auth';
 import { connectToDatabase, fromMongo } from './mongodb';
 
-// Helper function to create or update user in MongoDB
+// Helper function to create or update user in MongoDB.
+// This function will now throw an error if database operations fail.
 const getOrCreateUser = async (decodedToken: DecodedIdToken) => {
-    try {
-        const { uid, email, name, picture } = decodedToken;
-        const { db } = await connectToDatabase();
-        const usersCollection = db.collection('users');
-        
-        let userDoc = await usersCollection.findOne({ uid: uid });
+    const { uid, email, name, picture } = decodedToken;
+    const { db } = await connectToDatabase();
+    const usersCollection = db.collection('users');
+    
+    let userDoc = await usersCollection.findOne({ uid: uid });
 
-        if (userDoc) {
-            // User exists, just return them.
-            return fromMongo(userDoc);
-        }
-        
-        // New user, determine role and create them.
-        const isOwnerByEmail = email === 'admin@jfl.com';
-        const newUser = {
-            uid,
-            email: email,
-            name: name || email?.split('@')[0],
-            role: isOwnerByEmail ? 'OWNER' : 'USER',
-            image: picture || '',
-            createdAt: new Date(),
-        };
-        const result = await usersCollection.insertOne(newUser);
-        
-        const createdUser = { ...newUser, _id: result.insertedId };
-        return fromMongo(createdUser);
-
-    } catch (error) {
-        console.error("Database error in getOrCreateUser:", error);
-        // Return null to indicate failure, which will prevent login
-        return null;
+    if (userDoc) {
+        return fromMongo(userDoc);
     }
+    
+    const isOwnerByEmail = email === 'admin@jfl.com';
+    const newUser = {
+        uid,
+        email: email,
+        name: name || email?.split('@')[0],
+        role: isOwnerByEmail ? 'OWNER' : 'USER',
+        image: picture || '',
+        createdAt: new Date(),
+    };
+    const result = await usersCollection.insertOne(newUser);
+    
+    const createdUser = { ...newUser, _id: result.insertedId };
+    return fromMongo(createdUser);
 };
 
 export const authOptions: NextAuthOptions = {
@@ -56,26 +48,37 @@ export const authOptions: NextAuthOptions = {
         try {
           const decodedToken = await adminAuth.verifyIdToken(credentials.idToken);
           if (!decodedToken || !decodedToken.uid) {
-            return null;
+            return null; // Token is invalid or doesn't have a UID
           }
 
-          const userData = await getOrCreateUser(decodedToken);
-          
-          if (userData) {
+          // This block now includes detailed error handling.
+          try {
+            const userData = await getOrCreateUser(decodedToken);
+            if (!userData) {
+                // This case should ideally not be hit if getOrCreateUser throws, but as a safeguard:
+                throw new Error("User data could not be retrieved from the database.");
+            }
+            
             return {
-              id: userData.id, // Use the MongoDB document ID
-              uid: userData.uid, // Keep firebase UID for reference
+              id: userData.id,
+              uid: userData.uid,
               email: userData.email,
               name: userData.name,
               image: userData.image,
               role: userData.role.toLowerCase(),
             };
-          }
-          return null;
 
-        } catch (e) {
-          console.error("Firebase ID token verification failed:", e);
-          return null;
+          } catch (dbError: any) {
+              console.error("Database operation failed during authorization:", dbError);
+              // Re-throw the specific database error so NextAuth can pass it to the client.
+              throw new Error(`Database Error: ${dbError.message}`);
+          }
+
+        } catch (error: any) {
+          console.error("Authorization failed:", error);
+          // This will catch the re-thrown DB error or any other error (e.g., Firebase token verification)
+          // The message from this error is what will be displayed on the login page.
+          throw new Error(error.message || 'An unknown authorization error occurred.');
         }
       }
     })
@@ -100,7 +103,7 @@ export const authOptions: NextAuthOptions = {
   },
   pages: {
     signIn: '/login',
-    error: '/login',
+    error: '/login', // Errors will redirect to the login page
   },
   session: {
     strategy: 'jwt',

@@ -85,7 +85,8 @@ export default function LoginPage() {
       });
 
       if (res?.error) {
-        setError('Login failed after authentication. Please contact support.');
+        // Display the specific error message from the server
+        setError(res.error);
       } else if (res?.ok) {
         router.push(callbackUrl);
       }
