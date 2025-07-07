@@ -387,6 +387,7 @@ const LogsTable = ({ logs, isLoading, onViewDetails }: { logs: AuditLog[], isLoa
 const UsersTable = ({ users, onRoleChange, onAssignBuckets, isLoading }: { users: AppUser[], onRoleChange: (user: AppUser, role: 'ADMIN' | 'USER') => void, onAssignBuckets: (user: AppUser) => void, isLoading: boolean }) => {
     const { data: session } = useSession();
     const isOwner = session?.user?.role === 'owner';
+    const currentUserRole = session?.user?.role;
     
     return (
         <div className="border rounded-lg">
@@ -420,7 +421,7 @@ const UsersTable = ({ users, onRoleChange, onAssignBuckets, isLoading }: { users
                             <TableCell className="text-right">
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
-                                        <Button variant="ghost" size="icon" disabled={user.role === 'OWNER' || user.id === session?.user?.id}>
+                                        <Button variant="ghost" size="icon" disabled={user.role === 'OWNER' || user.id === session?.user?.id || (currentUserRole === 'admin' && user.role === 'ADMIN')}>
                                             <MoreVertical className="h-5 w-5" />
                                         </Button>
                                     </DropdownMenuTrigger>
@@ -431,7 +432,7 @@ const UsersTable = ({ users, onRoleChange, onAssignBuckets, isLoading }: { users
                                         <DropdownMenuItem onClick={() => onRoleChange(user, 'USER')} disabled={!isOwner || user.role === 'USER'}>
                                             <UserIcon className="mr-2 h-4 w-4" /> Make User {user.role === 'USER' && <Check className="ml-auto h-4 w-4" />}
                                         </DropdownMenuItem>
-                                        <DropdownMenuItem onClick={() => onAssignBuckets(user)} disabled={user.role === 'ADMIN' || user.role === 'OWNER'}>
+                                        <DropdownMenuItem onClick={() => onAssignBuckets(user)} disabled={user.role === 'OWNER' || (currentUserRole === 'admin' && user.role === 'ADMIN')}>
                                             <KeyRound className="mr-2 h-4 w-4" /> Assign Buckets
                                         </DropdownMenuItem>
                                     </DropdownMenuContent>
@@ -444,5 +445,7 @@ const UsersTable = ({ users, onRoleChange, onAssignBuckets, isLoading }: { users
         </div>
     )
 };
+
+    
 
     
