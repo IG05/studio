@@ -400,7 +400,7 @@ const UsersTable = ({ users, onRoleChange, onAssignBuckets, isLoading }: { users
                 </TableHeader>
                 <TableBody>
                 {isLoading ? (
-                    Array.from({ length: 3 }).map((_, i) => ( <TableRow key={i}> <TableCell colSpan={3}><Skeleton className="h-8 w-full" /></TableCell></TableRow>))
+                    Array.from({ length: 3 }).map((_, i) => (<TableRow key={i}><TableCell colSpan={3}><Skeleton className="h-8 w-full" /></TableCell></TableRow>))
                     ) : users.length === 0 ? (
                         <TableRow><TableCell colSpan={3} className="h-24 text-center">No users found.</TableCell></TableRow>
                     ) : users.map((user) => (
