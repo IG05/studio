@@ -1,3 +1,4 @@
+
 import type { DefaultSession, User } from 'next-auth';
 import type { JWT } from 'next-auth/jwt';
 
@@ -8,6 +9,7 @@ declare module 'next-auth' {
   interface Session {
     user: {
       id?: string;
+      uid?: string;
       role?: 'owner' | 'admin' | 'user';
     } & DefaultSession['user'];
   }
@@ -17,6 +19,7 @@ declare module 'next-auth' {
    * available in the `jwt` callback's `user` parameter.
    */
   interface User {
+    uid?: string;
     role?: 'owner' | 'admin' | 'user';
   }
 }
@@ -26,6 +29,7 @@ declare module 'next-auth/jwt' {
   interface JWT {
     /** OpenID ID Token */
     id?: string;
+    uid?: string;
     role?: 'owner' | 'admin' | 'user';
   }
 }
