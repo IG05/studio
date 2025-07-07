@@ -67,7 +67,7 @@ export const authOptions: NextAuthOptions = {
           
           if (userData) {
             return {
-              id: userData.uid, // Use uid from mongo doc
+              id: userData.uid,
               email: userData.email,
               name: userData.name,
               image: userData.image,
