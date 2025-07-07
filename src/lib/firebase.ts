@@ -1,3 +1,4 @@
+
 import admin from 'firebase-admin';
 
 // This guard prevents re-initialization on hot reloads
