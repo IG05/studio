@@ -42,9 +42,10 @@ export async function PATCH(
             updatePayload.$set.approvedAt = new Date();
             updatePayload.$set.approvedByUserId = session.user.id;
             updatePayload.$set.approvedByUserName = session.user.name;
+            updatePayload.$set.approvedByUserEmail = session.user.email;
         } else {
             updatePayload.$set.denialReason = denialReason;
-            updatePayload.$unset = { approvedAt: "", approvedByUserId: "", approvedByUserName: "" };
+            updatePayload.$unset = { approvedAt: "", approvedByUserId: "", approvedByUserName: "", approvedByUserEmail: "" };
         }
         
         const result = await db.collection('accessRequests').findOneAndUpdate(

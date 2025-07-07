@@ -54,5 +54,6 @@ export type AccessRequest = {
   // Approval data
   approvedByUserId?: string | null;
   approvedByUserName?: string | null;
+  approvedByUserEmail?: string | null;
   approvedAt?: string | null; // ISO string format
 };

@@ -116,13 +116,13 @@ export function RequestDetailsDialog({ request, onOpenChange }: RequestDetailsDi
                 <p className="text-sm text-muted-foreground p-2 bg-muted rounded-md">{request.reason}</p>
             </div>
 
-            {request.status === 'approved' && request.approvedByUserName && (
+            {request.status === 'approved' && (request.approvedByUserEmail || request.approvedByUserName) && (
                 <div className="grid gap-2 p-4 border rounded-lg bg-green-50 dark:bg-green-900/20">
                     <div className="flex items-start gap-4">
                         <CheckCircle className="h-5 w-5 mt-1 text-green-600 dark:text-green-400" />
                         <div>
                             <p className="text-sm text-muted-foreground">Approved By</p>
-                            <p className="font-medium">{request.approvedByUserName}</p>
+                            <p className="font-medium">{request.approvedByUserEmail || request.approvedByUserName}</p>
                             <p className="text-xs text-muted-foreground">{formatDisplayDate(request.approvedAt)}</p>
                         </div>
                     </div>
