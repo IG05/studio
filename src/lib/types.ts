@@ -56,8 +56,12 @@ export type AccessRequest = {
   // Approval data
   approvedByUserId?: string | null;
   approvedByUserEmail?: string | null;
-  approvedByUserName?: string | null;
   approvedAt?: string | null; // ISO string format
+
+  // Denial data
+  deniedByUserId?: string | null;
+  deniedByUserEmail?: string | null;
+  deniedAt?: string | null; // ISO string format
 };
 
 export type AuditLog = {

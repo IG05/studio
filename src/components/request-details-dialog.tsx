@@ -1,5 +1,7 @@
+
 "use client";
 
+import { useSession } from 'next-auth/react';
 import {
   Dialog,
   DialogContent,
@@ -52,8 +54,10 @@ const getStatusInfo = (req: AccessRequest) => {
     }
 }
 
-const RequestDetailsContent = ({ request }: { request: AccessRequest }) => {
+const RequestDetailsContent = ({ request, userRole }: { request: AccessRequest, userRole?: 'owner' | 'admin' | 'user' }) => {
     const statusInfo = getStatusInfo(request);
+    const isAdminView = userRole === 'admin' || userRole === 'owner';
+
     return (
         <div className="grid gap-4 py-4">
             <div className="flex items-center justify-between">
@@ -100,14 +104,16 @@ const RequestDetailsContent = ({ request }: { request: AccessRequest }) => {
 
             {request.status === 'approved' && (
                 <div className="grid gap-2 p-4 border rounded-lg bg-green-50 dark:bg-green-900/20">
-                    <div className="flex items-start gap-4">
-                        <CheckCircle className="h-5 w-5 mt-1 text-green-600 dark:text-green-400" />
-                        <div>
-                            <p className="text-sm text-muted-foreground">Approved By</p>
-                            <p className="font-medium">{request.approvedByUserEmail}</p>
-                            <p className="text-xs text-muted-foreground">{formatDisplayDate(request.approvedAt)}</p>
+                    {isAdminView && (
+                        <div className="flex items-start gap-4">
+                            <CheckCircle className="h-5 w-5 mt-1 text-green-600 dark:text-green-400" />
+                            <div>
+                                <p className="text-sm text-muted-foreground">Approved By</p>
+                                <p className="font-medium">{request.approvedByUserEmail}</p>
+                                <p className="text-xs text-muted-foreground">{formatDisplayDate(request.approvedAt)}</p>
+                            </div>
                         </div>
-                    </div>
+                    )}
                     {request.approvalReason && (
                         <div className="flex items-start gap-4">
                             <MessageSquareQuote className="h-5 w-5 mt-1 text-green-600 dark:text-green-400" />
@@ -128,6 +134,16 @@ const RequestDetailsContent = ({ request }: { request: AccessRequest }) => {
             )}
             {request.status === 'denied' && (
                 <div className="grid gap-2 p-4 border rounded-lg bg-red-50 dark:bg-red-900/20">
+                    {isAdminView && request.deniedByUserEmail && (
+                         <div className="flex items-start gap-4">
+                            <User className="h-5 w-5 mt-1 text-red-600 dark:text-red-400" />
+                            <div>
+                                <p className="text-sm text-muted-foreground">Denied By</p>
+                                <p className="font-medium">{request.deniedByUserEmail}</p>
+                                <p className="text-xs text-muted-foreground">{formatDisplayDate(request.deniedAt)}</p>
+                            </div>
+                        </div>
+                    )}
                     <div className="flex items-start gap-4">
                         <Ban className="h-5 w-5 mt-1 text-red-600 dark:text-red-400" />
                         <div>
@@ -144,6 +160,8 @@ const RequestDetailsContent = ({ request }: { request: AccessRequest }) => {
 
 export function RequestDetailsDialog({ request, isLoading, onOpenChange }: RequestDetailsDialogProps) {
   const isOpen = !!request;
+  const { data: session } = useSession();
+  const userRole = session?.user?.role;
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -162,7 +180,7 @@ export function RequestDetailsDialog({ request, isLoading, onOpenChange }: Reque
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
         ) : (
-            <RequestDetailsContent request={request} />
+            <RequestDetailsContent request={request} userRole={userRole} />
         )}
       </DialogContent>
     </Dialog>

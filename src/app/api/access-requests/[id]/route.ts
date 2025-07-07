@@ -11,8 +11,8 @@ export async function GET(
     { params }: { params: { id: string } }
 ) {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.role || !['admin', 'owner'].includes(session.user.role)) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!session?.user?.id) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { id } = params;
@@ -28,6 +28,11 @@ export async function GET(
 
         if (!requestDoc) {
             return NextResponse.json({ error: 'Request not found' }, { status: 404 });
+        }
+        
+        // Security check: Admins can see any request, users can only see their own.
+        if (session.user.role !== 'admin' && session.user.role !== 'owner' && requestDoc.userId !== session.user.id) {
+             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
         
         return NextResponse.json(fromMongo(requestDoc));
@@ -87,13 +92,15 @@ export async function PATCH(
             updatePayload.$set.approvedAt = new Date();
             updatePayload.$set.approvedByUserId = session.user.id;
             updatePayload.$set.approvedByUserEmail = session.user.email;
-            updatePayload.$set.approvedByUserName = session.user.name;
             updatePayload.$set.approvalReason = reason;
-            updatePayload.$unset = { denialReason: "" };
+            updatePayload.$unset = { denialReason: "", deniedAt: "", deniedByUserId: "", deniedByUserEmail: "" };
 
         } else { // status === 'denied'
             updatePayload.$set.denialReason = reason;
-            updatePayload.$unset = { approvedAt: "", approvedByUserId: "", approvedByUserEmail: "", approvedByUserName: "", expiresAt: "", approvalReason: "" };
+            updatePayload.$set.deniedAt = new Date();
+            updatePayload.$set.deniedByUserId = session.user.id;
+            updatePayload.$set.deniedByUserEmail = session.user.email;
+            updatePayload.$unset = { approvedAt: "", approvedByUserId: "", approvedByUserEmail: "", expiresAt: "", approvalReason: "" };
         }
         
         const result = await accessRequestsCollection.findOneAndUpdate(
@@ -117,7 +124,6 @@ export async function PATCH(
             target: {
               requestId: id,
               userId: requestToUpdate.userId,
-              userName: requestToUpdate.userName,
               userEmail: requestToUpdate.userEmail,
               bucketName: requestToUpdate.bucketName,
             },
