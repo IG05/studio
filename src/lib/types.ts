@@ -36,7 +36,7 @@ export type S3Object = {
 
 // This type now reflects a document in the 'accessRequests' Firestore collection.
 export type AccessRequest = {
-  id: string; // The Firestore document ID
+  id: string; // The document ID
   bucketName: string;
   region: string;
   reason: string;
@@ -50,4 +50,9 @@ export type AccessRequest = {
   userName: string | null;
   userEmail: string | null;
   userImage: string | null;
+
+  // Approval data
+  approvedByUserId?: string | null;
+  approvedByUserName?: string | null;
+  approvedAt?: string | null; // ISO string format
 };

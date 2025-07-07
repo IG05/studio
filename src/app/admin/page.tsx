@@ -36,6 +36,7 @@ import { DenyRequestDialog } from '@/components/deny-request-dialog';
 import { useSession } from 'next-auth/react';
 import { AssignBucketsDialog } from '@/components/assign-buckets-dialog';
 import { Input } from '@/components/ui/input';
+import { RequestDetailsDialog } from '@/components/request-details-dialog';
 
 const formatExpiresAt = (expiresAt: string | null | undefined) => {
     if (!expiresAt) return 'Permanent';
@@ -57,6 +58,7 @@ export default function AdminPage() {
   const [denialCandidate, setDenialCandidate] = React.useState<AccessRequest | null>(null);
   const [permissionUser, setPermissionUser] = React.useState<AppUser | null>(null);
   const [userSearchQuery, setUserSearchQuery] = React.useState('');
+  const [viewingRequest, setViewingRequest] = React.useState<AccessRequest | null>(null);
 
   React.useEffect(() => {
     const fetchData = async () => {
@@ -117,7 +119,8 @@ export default function AdminPage() {
         return res.json();
     })
     .then(updatedRequest => {
-        setRequests(prev => prev.map(r => r.id === updatedRequest.id ? updatedRequest : r));
+        // After successful update, re-fetch all requests to get the latest data including approver info
+        fetch('/api/access-requests').then(res => res.json()).then(setRequests);
         toast({
             title: `Request ${status}`,
             description: `The access request has been successfully ${status}.`,
@@ -205,6 +208,10 @@ export default function AdminPage() {
             }
         }}
        />
+       <RequestDetailsDialog
+        request={viewingRequest}
+        onOpenChange={(isOpen) => !isOpen && setViewingRequest(null)}
+       />
        <AssignBucketsDialog
         user={permissionUser}
         onOpenChange={(isOpen) => !isOpen && setPermissionUser(null)}
@@ -219,10 +226,10 @@ export default function AdminPage() {
                       <TabsTrigger value="users">User Management</TabsTrigger>
                   </TabsList>
                   <TabsContent value="pending">
-                      <RequestsTable requests={filteredRequests} handleApprove={id => handleRequest(id, 'approved')} handleDeny={setDenialCandidate} getBadgeVariant={getBadgeVariant} isLoading={isLoading} />
+                      <RequestsTable requests={filteredRequests} handleApprove={id => handleRequest(id, 'approved')} handleDeny={setDenialCandidate} getBadgeVariant={getBadgeVariant} isLoading={isLoading} onViewDetails={setViewingRequest}/>
                   </TabsContent>
                   <TabsContent value="historical">
-                      <RequestsTable requests={filteredRequests} handleApprove={id => handleRequest(id, 'approved')} handleDeny={setDenialCandidate} getBadgeVariant={getBadgeVariant} isLoading={isLoading} />
+                      <RequestsTable requests={filteredRequests} handleApprove={id => handleRequest(id, 'approved')} handleDeny={setDenialCandidate} getBadgeVariant={getBadgeVariant} isLoading={isLoading} onViewDetails={setViewingRequest} />
                   </TabsContent>
                   <TabsContent value="users">
                     <div className="flex justify-end mb-4">
@@ -245,7 +252,7 @@ export default function AdminPage() {
   );
 }
 
-const RequestsTable = ({ requests, handleApprove, handleDeny, getBadgeVariant, isLoading }: { requests: AccessRequest[], handleApprove: (id: string) => void, handleDeny: (req: AccessRequest) => void, getBadgeVariant: (status: AccessRequest['status']) => string, isLoading: boolean }) => (
+const RequestsTable = ({ requests, handleApprove, handleDeny, getBadgeVariant, isLoading, onViewDetails }: { requests: AccessRequest[], handleApprove: (id: string) => void, handleDeny: (req: AccessRequest) => void, getBadgeVariant: (status: AccessRequest['status']) => string, isLoading: boolean, onViewDetails: (req: AccessRequest) => void }) => (
     <div className="border rounded-lg">
         <Table>
             <TableHeader>
@@ -341,7 +348,7 @@ const RequestsTable = ({ requests, handleApprove, handleDeny, getBadgeVariant, i
                             </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent>
-                            <DropdownMenuItem>View Details</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => onViewDetails(req)}>View Details</DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
                     </div>
