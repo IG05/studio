@@ -1,4 +1,3 @@
-
 "use client";
 
 import {
@@ -29,10 +28,7 @@ const formatDisplayDate = (dateString?: string | null) => {
     }
 }
 
-export function RequestDetailsDialog({ request, isLoading, onOpenChange }: RequestDetailsDialogProps) {
-  const isOpen = !!request;
-
-  const getStatusInfo = (req: AccessRequest) => {
+const getStatusInfo = (req: AccessRequest) => {
     switch (req.status) {
         case 'approved':
             return {
@@ -54,27 +50,11 @@ export function RequestDetailsDialog({ request, isLoading, onOpenChange }: Reque
                 badge: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300'
             };
     }
-  }
+}
 
-  const renderContent = () => {
-    if (isLoading || !request?.status) {
-        return (
-            <div className="flex justify-center items-center h-48">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
-        )
-    }
-
+const RequestDetailsContent = ({ request }: { request: AccessRequest }) => {
     const statusInfo = getStatusInfo(request);
-
     return (
-        <>
-         <DialogHeader>
-          <DialogTitle>Request Details</DialogTitle>
-          <DialogDescription>
-            Detailed information for access request to <strong>{request.bucketName}</strong>.
-          </DialogDescription>
-        </DialogHeader>
         <div className="grid gap-4 py-4">
             <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold">Status</h3>
@@ -147,7 +127,7 @@ export function RequestDetailsDialog({ request, isLoading, onOpenChange }: Reque
                 </div>
             )}
             {request.status === 'denied' && (
-                 <div className="grid gap-2 p-4 border rounded-lg bg-red-50 dark:bg-red-900/20">
+                <div className="grid gap-2 p-4 border rounded-lg bg-red-50 dark:bg-red-900/20">
                     <div className="flex items-start gap-4">
                         <Ban className="h-5 w-5 mt-1 text-red-600 dark:text-red-400" />
                         <div>
@@ -158,14 +138,32 @@ export function RequestDetailsDialog({ request, isLoading, onOpenChange }: Reque
                 </div>
             )}
         </div>
-        </>
-    )
-  }
+    );
+};
+
+
+export function RequestDetailsDialog({ request, isLoading, onOpenChange }: RequestDetailsDialogProps) {
+  const isOpen = !!request;
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
-        {renderContent()}
+        <DialogHeader>
+          <DialogTitle>{isLoading || !request ? 'Loading Request...' : 'Request Details'}</DialogTitle>
+          {!isLoading && request && (
+            <DialogDescription>
+              Detailed information for access request to <strong>{request.bucketName}</strong>.
+            </DialogDescription>
+          )}
+        </DialogHeader>
+        
+        {isLoading || !request ? (
+            <div className="flex justify-center items-center h-48">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+        ) : (
+            <RequestDetailsContent request={request} />
+        )}
       </DialogContent>
     </Dialog>
   );
