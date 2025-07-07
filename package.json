@@ -48,6 +48,7 @@
     "firebase-admin": "^12.3.0",
     "genkit": "^1.13.0",
     "lucide-react": "^0.475.0",
+    "mongodb": "^6.8.0",
     "mysql2": "^3.10.2",
     "next": "15.3.3",
     "next-auth": "^4.24.7",

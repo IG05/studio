@@ -1,21 +1,10 @@
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { db } from '@/lib/firebase';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import admin from 'firebase-admin';
+import { connectToDatabase, toObjectId, fromMongo } from '@/lib/mongodb';
 
-// Helper to convert Firestore Timestamps to ISO strings
-const convertTimestamps = (docData: admin.firestore.DocumentData) => {
-    const data = { ...docData };
-    for (const key in data) {
-        if (data[key] instanceof admin.firestore.Timestamp) {
-            data[key] = data[key].toDate().toISOString();
-        }
-    }
-    return data;
-};
 
 export async function PATCH(
     request: NextRequest,
@@ -27,6 +16,12 @@ export async function PATCH(
     }
 
     const { id } = params;
+    const objectId = toObjectId(id);
+
+    if (!objectId) {
+        return NextResponse.json({ error: 'Invalid request ID format' }, { status: 400 });
+    }
+
     const body = await request.json();
     const { status, denialReason } = body;
 
@@ -39,30 +34,29 @@ export async function PATCH(
     }
 
     try {
-        const requestRef = db.collection('accessRequests').doc(id);
+        const { db } = await connectToDatabase();
         
-        const updateData: { status: 'approved' | 'denied', denialReason?: string | null } = { status, denialReason: denialReason || null };
+        const updatePayload: any = { $set: { status } };
         if (status === 'approved') {
-            delete updateData.denialReason;
+            updatePayload.$unset = { denialReason: "" };
+        } else {
+            updatePayload.$set.denialReason = denialReason;
         }
-
-        await requestRef.update(updateData);
         
-        const updatedDoc = await requestRef.get();
-        if (!updatedDoc.exists) {
+        const result = await db.collection('accessRequests').findOneAndUpdate(
+            { _id: objectId },
+            updatePayload,
+            { returnDocument: 'after' }
+        );
+        
+        if (!result) {
             return NextResponse.json({ error: 'Request not found' }, { status: 404 });
         }
         
-        const responseData = { id: updatedDoc.id, ...convertTimestamps(updatedDoc.data()!) };
-
-        return NextResponse.json(responseData);
+        return NextResponse.json(fromMongo(result));
 
     } catch (error) {
         console.error("Failed to update access request:", error);
-        // Basic error check, Firestore errors are different from Prisma's
-        if (error instanceof Error && error.message.includes("NOT_FOUND")) {
-             return NextResponse.json({ error: 'Request not found' }, { status: 404 });
-        }
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
 }

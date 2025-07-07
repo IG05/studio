@@ -1,38 +1,48 @@
 
 import type { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
-import { db, auth as adminAuth } from './firebase'; // Use our firebase admin instance
+import { auth as adminAuth } from './firebase'; // Use our firebase admin instance
 import type { DecodedIdToken } from 'firebase-admin/auth';
+import { connectToDatabase, fromMongo } from './mongodb';
 
 // Helper function to create or update user in Firestore
 const getOrCreateUser = async (decodedToken: DecodedIdToken) => {
     const { uid, email, name, picture } = decodedToken;
-    const userRef = db.collection('users').doc(uid);
-    const userDoc = await userRef.get();
-
+    const { db } = await connectToDatabase();
+    const usersCollection = db.collection('users');
+    
     const isOwnerByEmail = email === 'admin@jfl.com';
 
-    if (userDoc.exists) {
-        const userData = userDoc.data()!;
+    let userDoc = await usersCollection.findOne({ uid: uid });
+
+    if (userDoc) {
         // If the user is the designated owner but their role is not OWNER, update it.
         // This corrects any previously incorrect role assignment.
-        if (isOwnerByEmail && userData.role !== 'OWNER') {
-            await userRef.update({ role: 'OWNER' });
-            return { ...userData, role: 'OWNER' };
+        if (isOwnerByEmail && userDoc.role !== 'OWNER') {
+            const result = await usersCollection.findOneAndUpdate(
+                { uid: uid },
+                { $set: { role: 'OWNER' } },
+                { returnDocument: 'after' }
+            );
+            userDoc = result;
         }
-        return userData;
+        return fromMongo(userDoc);
     }
     
     // New user, determine role
     const newUser = {
+        uid,
         email: email,
         name: name || email?.split('@')[0],
         role: isOwnerByEmail ? 'OWNER' : 'USER',
         image: picture || '',
-        createdAt: new Date().toISOString(),
+        createdAt: new Date(),
     };
-    await userRef.set(newUser);
-    return newUser;
+    const result = await usersCollection.insertOne(newUser);
+    
+    // Construct the document to return, matching the shape of a found document
+    const createdUser = { ...newUser, _id: result.insertedId };
+    return fromMongo(createdUser);
 };
 
 export const authOptions: NextAuthOptions = {
@@ -57,7 +67,7 @@ export const authOptions: NextAuthOptions = {
           
           if (userData) {
             return {
-              id: decodedToken.uid,
+              id: userData.uid, // Use uid from mongo doc
               email: userData.email,
               name: userData.name,
               image: userData.image,

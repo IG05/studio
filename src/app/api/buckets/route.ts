@@ -6,16 +6,13 @@ import { authOptions } from '@/lib/auth';
 import type { Bucket, S3CommanderUser } from '@/lib/types';
 import { S3Client, ListBucketsCommand, GetBucketLocationCommand } from '@aws-sdk/client-s3';
 import { CloudWatchClient, GetMetricDataCommand } from '@aws-sdk/client-cloudwatch';
-import { db } from '@/lib/firebase';
+import { connectToDatabase } from '@/lib/mongodb';
 import { isAfter } from 'date-fns';
 
 async function getPermanentPermissions(userId: string): Promise<string[]> {
-    const permDoc = await db.collection('permissions').doc(userId).get();
-    if (permDoc.exists) {
-        const data = permDoc.data();
-        return data?.buckets || [];
-    }
-    return [];
+    const { db } = await connectToDatabase();
+    const permDoc = await db.collection('permissions').findOne({ userId });
+    return permDoc?.buckets || [];
 }
 
 
@@ -25,7 +22,6 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Explicitly check for AWS credentials
     if (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY || !process.env.AWS_REGION) {
         console.error("Missing AWS configuration in .env file");
         return NextResponse.json({ error: 'Server is not configured for AWS access. Please check server logs.' }, { status: 500 });
@@ -50,11 +46,12 @@ export async function GET(request: NextRequest) {
 
         const user = session.user as S3CommanderUser;
         const isAdminOrOwner = ['admin', 'owner'].includes(user.role);
+        
+        const { db } = await connectToDatabase();
 
-        // Fetch all data in parallel
         const [s3BucketsResult, tempPermissionsResult, permanentPermissions] = await Promise.all([
             s3Client.send(new ListBucketsCommand({})),
-            !isAdminOrOwner ? db.collection('accessRequests').where('userId', '==', user.id).where('status', '==', 'approved').get() : Promise.resolve(null),
+            !isAdminOrOwner ? db.collection('accessRequests').find({ userId: user.id, status: 'approved' }).toArray() : Promise.resolve([]),
             !isAdminOrOwner ? getPermanentPermissions(user.id) : Promise.resolve([])
         ]);
 
@@ -63,18 +60,8 @@ export async function GET(request: NextRequest) {
         if (!s3Buckets) {
             return NextResponse.json([]);
         }
-
-        let tempPermissions: any[] = [];
-        if (tempPermissionsResult && !tempPermissionsResult.empty) {
-            tempPermissions = tempPermissionsResult.docs.map(doc => {
-                const data = doc.data();
-                // Convert Firestore timestamp to Date object for isAfter check
-                return {
-                    ...data,
-                    expiresAt: data.expiresAt ? data.expiresAt.toDate() : null
-                };
-            });
-        }
+        
+        let tempPermissions = tempPermissionsResult || [];
 
         const bucketDataPromises = s3Buckets.map(async (bucket) => {
             const bucketName = bucket.Name!;
@@ -82,14 +69,14 @@ export async function GET(request: NextRequest) {
 
             try {
                 const location = await s3Client.send(new GetBucketLocationCommand({ Bucket: bucketName }));
-                region = location.LocationConstraint || 'us-east-1'; // us-east-1 is the default and returns null
+                region = location.LocationConstraint || 'us-east-1';
             } catch (e) {
                 console.warn(`Could not get location for bucket ${bucketName}, defaulting to ${region}. Error:`, e);
             }
 
             const endTime = new Date();
             const startTime = new Date();
-            startTime.setDate(endTime.getDate() - 3); // Look back 3 days for a data point
+            startTime.setDate(endTime.getDate() - 3);
 
             let bucketSize: number | undefined = undefined;
             try {
@@ -131,10 +118,8 @@ export async function GET(request: NextRequest) {
                 const permission = tempPermissions.find(p => p.bucketName === bucketName);
                 if (permission) {
                     if (permission.expiresAt && isAfter(new Date(), permission.expiresAt)) {
-                        // Access has expired
                         access = 'none';
                     } else {
-                        // Access is valid and temporary
                         access = 'limited';
                         tempAccessExpiresAt = permission.expiresAt?.toISOString();
                     }

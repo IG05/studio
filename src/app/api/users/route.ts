@@ -2,8 +2,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { db } from '@/lib/firebase';
-import type { AppUser } from '@/lib/types';
+import { connectToDatabase, fromMongo } from '@/lib/mongodb';
 
 export async function GET() {
     const session = await getServerSession(authOptions);
@@ -13,13 +12,14 @@ export async function GET() {
     }
 
     try {
-        const snapshot = await db.collection('users').orderBy('name', 'asc').get();
+        const { db } = await connectToDatabase();
+        const usersFromDb = await db.collection('users').find().sort({ name: 1 }).toArray();
         
-        if (snapshot.empty) {
+        if (usersFromDb.length === 0) {
             return NextResponse.json([]);
         }
 
-        const users = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AppUser));
+        const users = usersFromDb.map(fromMongo);
         
         return NextResponse.json(users);
     } catch (error) {

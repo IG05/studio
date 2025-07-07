@@ -15,7 +15,7 @@ if (!admin.apps.length) {
       credential: admin.credential.cert(serviceAccount),
       projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID
     });
-    console.log("Firebase Admin SDK initialized successfully.");
+    console.log("Firebase Admin SDK initialized successfully for Authentication.");
   } catch (error: any) {
     console.error('Firebase Admin initialization error:', error.message);
     // In a real app, you might want to handle this more gracefully
@@ -23,5 +23,4 @@ if (!admin.apps.length) {
   }
 }
 
-export const db = admin.firestore();
 export const auth = admin.auth();

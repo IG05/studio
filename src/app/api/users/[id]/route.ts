@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { db } from '@/lib/firebase';
+import { connectToDatabase, toObjectId, fromMongo } from '@/lib/mongodb';
 
 export async function PATCH(
     request: NextRequest,
@@ -14,8 +14,19 @@ export async function PATCH(
         return NextResponse.json({ error: 'Forbidden: Only the owner can change user roles.' }, { status: 403 });
     }
 
+    const userToUpdateId = toObjectId(params.id);
+    if (!userToUpdateId) {
+        return NextResponse.json({ error: 'Invalid user ID format' }, { status: 400 });
+    }
+
+    // Use session.user.id which is the UID from Firebase Auth.
+    // Querying users by _id won't work here since we only have UID in session.
+    // We need to fetch the user by their _id, and check if their uid matches the session's uid.
+    const { db } = await connectToDatabase();
+    const userToUpdate = await db.collection('users').findOne({ _id: userToUpdateId });
+    
     // Admins cannot change their own role
-    if (session.user.id === params.id) {
+    if (userToUpdate?.uid === session.user.id) {
         return NextResponse.json({ error: 'Admins cannot change their own role.' }, { status: 400 });
     }
 
@@ -27,14 +38,17 @@ export async function PATCH(
             return NextResponse.json({ error: 'Invalid role provided.' }, { status: 400 });
         }
 
-        const userRef = db.collection('users').doc(params.id);
-        await userRef.update({ role });
+        const result = await db.collection('users').findOneAndUpdate(
+            { _id: userToUpdateId },
+            { $set: { role } },
+            { returnDocument: 'after' }
+        );
 
-        const updatedUserDoc = await userRef.get();
-        const updatedUser = { id: updatedUserDoc.id, ...updatedUserDoc.data() };
+        if (!result) {
+            return NextResponse.json({ error: 'User not found' }, { status: 404 });
+        }
 
-
-        return NextResponse.json(updatedUser);
+        return NextResponse.json(fromMongo(result));
 
     } catch (error) {
         console.error("Failed to update user role:", error);

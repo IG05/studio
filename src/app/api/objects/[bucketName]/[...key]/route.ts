@@ -6,39 +6,38 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import type { S3CommanderUser } from '@/lib/types';
-import { db } from '@/lib/firebase';
+import { connectToDatabase } from '@/lib/mongodb';
 import { isAfter } from 'date-fns';
 
 async function checkAccess(user: S3CommanderUser, bucketName: string): Promise<boolean> {
     if (['admin', 'owner'].includes(user.role)) {
         return true;
     }
+    
+    const { db } = await connectToDatabase();
 
     // Check for permanent access first
-    const permDoc = await db.collection('permissions').doc(user.id).get();
-    if (permDoc.exists) {
-        const permissions = permDoc.data();
-        if (permissions?.buckets?.includes(bucketName)) {
-            return true;
-        }
+    const permDoc = await db.collection('permissions').findOne({ userId: user.id });
+    if (permDoc && permDoc.buckets?.includes(bucketName)) {
+        return true;
     }
 
     // If no permanent access, check for temporary access
-    const snapshot = await db.collection('accessRequests')
-        .where('userId', '==', user.id)
-        .where('bucketName', '==', bucketName)
-        .where('status', '==', 'approved')
-        .get();
+    const tempPermissions = await db.collection('accessRequests').find({
+        userId: user.id,
+        bucketName: bucketName,
+        status: 'approved'
+    }).toArray();
 
-    if (snapshot.empty) {
+
+    if (tempPermissions.length === 0) {
         return false;
     }
     
     // Check if there is at least one non-expired permission
-    const hasValidTempPermission = snapshot.docs.some(doc => {
-        const tempPermission = doc.data();
+    const hasValidTempPermission = tempPermissions.some(permission => {
         // If expiresAt is not set, it's considered non-expiring. If it is set, check if it's in the future.
-        return !tempPermission.expiresAt || !isAfter(new Date(), tempPermission.expiresAt.toDate());
+        return !permission.expiresAt || !isAfter(new Date(), permission.expiresAt);
     });
 
     return hasValidTempPermission;

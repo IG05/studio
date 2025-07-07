@@ -3,21 +3,8 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import type { NextRequest } from 'next/server';
-import { db } from '@/lib/firebase';
 import { add } from 'date-fns';
-import type { AccessRequest } from '@/lib/types';
-import admin from 'firebase-admin';
-
-// Helper to convert Firestore Timestamps to ISO strings
-const convertTimestamps = (docData: admin.firestore.DocumentData) => {
-    const data = { ...docData };
-    for (const key in data) {
-        if (data[key] instanceof admin.firestore.Timestamp) {
-            data[key] = data[key].toDate().toISOString();
-        }
-    }
-    return data;
-};
+import { connectToDatabase, fromMongo } from '@/lib/mongodb';
 
 export async function GET() {
     const session = await getServerSession(authOptions);
@@ -26,34 +13,28 @@ export async function GET() {
     }
     
     try {
-        let snapshot;
+        const { db } = await connectToDatabase();
+        let query = {};
         
-        // Admin or owner sees all requests, sorted by date
-        if (['admin', 'owner'].includes(session.user.role)) {
-            snapshot = await db.collection('accessRequests').orderBy('requestedAt', 'desc').get();
-        } else {
-            // User sees only their own requests. We sort them in code to avoid needing a composite index.
-            snapshot = await db.collection('accessRequests').where('userId', '==', session.user.id).get();
+        // Admin or owner sees all requests.
+        if (!['admin', 'owner'].includes(session.user.role)) {
+            // User sees only their own requests.
+            query = { userId: session.user.id };
         }
 
-        if (snapshot.empty) {
+        const requestsCursor = db.collection('accessRequests').find(query).sort({ requestedAt: -1 });
+        const requestsFromDb = await requestsCursor.toArray();
+        
+        if (requestsFromDb.length === 0) {
             return NextResponse.json([]);
         }
 
-        let requests = snapshot.docs.map(doc => {
-            const data = convertTimestamps(doc.data());
-            return { id: doc.id, ...data } as AccessRequest;
-        });
-
-        // If user is not admin/owner, sort here. The admin list is already sorted by the query.
-        if (!['admin', 'owner'].includes(session.user.role)) {
-            requests.sort((a, b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime());
-        }
+        const requests = requestsFromDb.map(fromMongo);
         
         return NextResponse.json(requests);
 
     } catch (error) {
-        console.error("Failed to fetch access requests from Firestore:", error);
+        console.error("Failed to fetch access requests from MongoDB:", error);
         return NextResponse.json({ error: 'Database error: Could not fetch access requests.' }, { status: 500 });
     }
 }
@@ -77,16 +58,13 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Duration must be between 15 and 720 minutes.' }, { status: 400 });
         }
 
-        const expiresAt = add(new Date(), { minutes: durationInMinutes });
-        const requestedAt = new Date();
-
         const newRequestData = {
             bucketName,
             region,
             reason,
             status: 'pending',
-            expiresAt,
-            requestedAt,
+            expiresAt: add(new Date(), { minutes: durationInMinutes }),
+            requestedAt: new Date(),
             // Denormalize user data for easier access
             userId: session.user.id,
             userName: session.user.name,
@@ -95,17 +73,12 @@ export async function POST(request: NextRequest) {
             denialReason: null,
         };
 
-        const docRef = await db.collection('accessRequests').add(newRequestData);
-        
-        const newRequest = { id: docRef.id, ...newRequestData };
-        // Convert dates to ISO strings for the response
-        const responseRequest = {
-            ...newRequest,
-            expiresAt: newRequest.expiresAt.toISOString(),
-            requestedAt: newRequest.requestedAt.toISOString(),
-        };
+        const { db } = await connectToDatabase();
+        const result = await db.collection('accessRequests').insertOne(newRequestData);
 
-        return NextResponse.json(responseRequest, { status: 201 });
+        const newRequest = { ...newRequestData, _id: result.insertedId };
+        
+        return NextResponse.json(fromMongo(newRequest), { status: 201 });
     
     } catch (error) {
         console.error("Failed to create access request:", error);

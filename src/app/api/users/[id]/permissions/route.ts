@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { db } from '@/lib/firebase';
+import { connectToDatabase } from '@/lib/mongodb';
 
 export async function GET(
     request: NextRequest,
@@ -17,11 +17,17 @@ export async function GET(
     const { id: userId } = params;
 
     try {
-        const permDoc = await db.collection('permissions').doc(userId).get();
-        if (!permDoc.exists) {
+        const { db } = await connectToDatabase();
+        const permDoc = await db.collection('permissions').findOne({ userId: userId });
+        
+        if (!permDoc) {
             return NextResponse.json({ buckets: [] });
         }
-        return NextResponse.json(permDoc.data());
+        
+        // MongoDB stores _id, which we don't need in the response.
+        const { _id, ...permissions } = permDoc;
+        return NextResponse.json(permissions);
+
     } catch (error) {
         console.error("Failed to get user permissions:", error);
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -45,13 +51,20 @@ export async function POST(
     }
 
     try {
-        const permRef = db.collection('permissions').doc(userId);
-        await permRef.set({
-            userId: userId,
-            buckets: buckets,
-            updatedAt: new Date().toISOString(),
-            updatedBy: session.user.id,
-        }, { merge: true });
+        const { db } = await connectToDatabase();
+        
+        await db.collection('permissions').updateOne(
+            { userId: userId },
+            {
+                $set: {
+                    userId: userId,
+                    buckets: buckets,
+                    updatedAt: new Date(),
+                    updatedBy: session.user.id,
+                }
+            },
+            { upsert: true }
+        );
 
         return NextResponse.json({ success: true, buckets });
     } catch (error) {
