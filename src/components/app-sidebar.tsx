@@ -16,7 +16,7 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { LayoutDashboard, ShieldCheck, LogOut, HardDrive, ChevronRight, History } from 'lucide-react';
+import { LayoutDashboard, ShieldCheck, LogOut, HardDrive, ChevronRight, History, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
     Collapsible,
@@ -127,9 +127,10 @@ export function AppSidebar() {
                     buckets.map((bucket) => (
                         <SidebarMenuItem key={bucket.name}>
                         <Link href={`/buckets/${bucket.name}`} className={cn(
-                            "flex items-center w-full text-sm rounded-md p-2 hover:bg-sidebar-accent",
+                            "flex items-center w-full text-sm rounded-md p-2 hover:bg-sidebar-accent gap-2",
                             pathname.startsWith(`/buckets/${bucket.name}`) && "bg-sidebar-accent"
                         )}>
+                            {bucket.access === 'limited' && <Clock className="w-4 h-4 text-orange-400 shrink-0" />}
                             <span className="truncate">{bucket.name}</span>
                         </Link>
                         </SidebarMenuItem>

@@ -12,10 +12,11 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from '@/components/ui/badge';
 import type { AccessRequest } from '@/lib/types';
 import { format, parseISO } from 'date-fns';
-import { User, Calendar, Clock, Lock, Unlock, ShieldQuestion, Ban, CheckCircle } from 'lucide-react';
+import { User, Calendar, Clock, Lock, Unlock, ShieldQuestion, Ban, CheckCircle, Loader2 } from 'lucide-react';
 
 interface RequestDetailsDialogProps {
   request: AccessRequest | null;
+  isLoading?: boolean;
   onOpenChange: (isOpen: boolean) => void;
 }
 
@@ -28,7 +29,7 @@ const formatDisplayDate = (dateString?: string | null) => {
     }
 }
 
-export function RequestDetailsDialog({ request, onOpenChange }: RequestDetailsDialogProps) {
+export function RequestDetailsDialog({ request, isLoading, onOpenChange }: RequestDetailsDialogProps) {
   const isOpen = !!request;
 
   const getStatusInfo = (req: AccessRequest) => {
@@ -55,14 +56,20 @@ export function RequestDetailsDialog({ request, onOpenChange }: RequestDetailsDi
     }
   }
 
-  if (!request) return null;
+  const renderContent = () => {
+    if (isLoading || !request?.status) {
+        return (
+            <div className="flex justify-center items-center h-48">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+        )
+    }
 
-  const statusInfo = getStatusInfo(request);
+    const statusInfo = getStatusInfo(request);
 
-  return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
+    return (
+        <>
+         <DialogHeader>
           <DialogTitle>Request Details</DialogTitle>
           <DialogDescription>
             Detailed information for access request to <strong>{request.bucketName}</strong>.
@@ -101,14 +108,6 @@ export function RequestDetailsDialog({ request, onOpenChange }: RequestDetailsDi
                         <p className="font-medium">{formatDisplayDate(request.requestedAt)}</p>
                     </div>
                 </div>
-
-                <div className="flex items-start gap-4">
-                    <Clock className="h-5 w-5 mt-1 text-muted-foreground" />
-                    <div>
-                        <p className="text-sm text-muted-foreground">Expires At</p>
-                        <p className="font-medium">{formatDisplayDate(request.expiresAt)}</p>
-                    </div>
-                </div>
             </div>
 
             <div className="grid gap-2 p-4 border rounded-lg">
@@ -116,14 +115,21 @@ export function RequestDetailsDialog({ request, onOpenChange }: RequestDetailsDi
                 <p className="text-sm text-muted-foreground p-2 bg-muted rounded-md">{request.reason}</p>
             </div>
 
-            {request.status === 'approved' && (request.approvedByUserEmail || request.approvedByUserName) && (
+            {request.status === 'approved' && (
                 <div className="grid gap-2 p-4 border rounded-lg bg-green-50 dark:bg-green-900/20">
                     <div className="flex items-start gap-4">
                         <CheckCircle className="h-5 w-5 mt-1 text-green-600 dark:text-green-400" />
                         <div>
                             <p className="text-sm text-muted-foreground">Approved By</p>
-                            <p className="font-medium">{request.approvedByUserEmail || request.approvedByUserName}</p>
+                            <p className="font-medium">{request.approvedByUserEmail}</p>
                             <p className="text-xs text-muted-foreground">{formatDisplayDate(request.approvedAt)}</p>
+                        </div>
+                    </div>
+                    <div className="flex items-start gap-4">
+                        <Clock className="h-5 w-5 mt-1 text-green-600 dark:text-green-400" />
+                        <div>
+                            <p className="text-sm text-muted-foreground">Access Expires At</p>
+                            <p className="font-medium">{formatDisplayDate(request.expiresAt)}</p>
                         </div>
                     </div>
                 </div>
@@ -141,6 +147,14 @@ export function RequestDetailsDialog({ request, onOpenChange }: RequestDetailsDi
             )}
 
         </div>
+        </>
+    )
+  }
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        {renderContent()}
       </DialogContent>
     </Dialog>
   );

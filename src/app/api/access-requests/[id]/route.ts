@@ -6,6 +6,38 @@ import { authOptions } from '@/lib/auth';
 import { connectToDatabase, toObjectId, fromMongo } from '@/lib/mongodb';
 import { add } from 'date-fns';
 
+export async function GET(
+    request: NextRequest,
+    { params }: { params: { id: string } }
+) {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.role || !['admin', 'owner'].includes(session.user.role)) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const { id } = params;
+    const objectId = toObjectId(id);
+
+    if (!objectId) {
+        return NextResponse.json({ error: 'Invalid request ID format' }, { status: 400 });
+    }
+
+    try {
+        const { db } = await connectToDatabase();
+        const requestDoc = await db.collection('accessRequests').findOne({ _id: objectId });
+
+        if (!requestDoc) {
+            return NextResponse.json({ error: 'Request not found' }, { status: 404 });
+        }
+        
+        return NextResponse.json(fromMongo(requestDoc));
+
+    } catch (error) {
+        console.error("Failed to fetch access request:", error);
+        return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    }
+}
+
 
 export async function PATCH(
     request: NextRequest,
@@ -55,11 +87,12 @@ export async function PATCH(
             updatePayload.$set.approvedAt = new Date();
             updatePayload.$set.approvedByUserId = session.user.id;
             updatePayload.$set.approvedByUserEmail = session.user.email;
+            updatePayload.$set.approvedByUserName = session.user.name;
             updatePayload.$unset = { denialReason: "" };
 
         } else { // status === 'denied'
             updatePayload.$set.denialReason = denialReason;
-            updatePayload.$unset = { approvedAt: "", approvedByUserId: "", approvedByUserEmail: "", expiresAt: "" };
+            updatePayload.$unset = { approvedAt: "", approvedByUserId: "", approvedByUserEmail: "", approvedByUserName: "", expiresAt: "" };
         }
         
         const result = await accessRequestsCollection.findOneAndUpdate(
@@ -81,6 +114,7 @@ export async function PATCH(
               email: session.user.email,
             },
             target: {
+              requestId: id,
               userId: requestToUpdate.userId,
               userName: requestToUpdate.userName,
               userEmail: requestToUpdate.userEmail,

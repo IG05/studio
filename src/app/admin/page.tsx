@@ -17,7 +17,7 @@ import { Header } from '@/components/header';
 import type { AccessRequest, AppUser, AuditLog } from '@/lib/types';
 import { format, parseISO } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
-import { CheckCircle, XCircle, MoreVertical, ShieldCheck, User as UserIcon, Check, KeyRound, Crown, Search, FileCheck, FileX, UserCog } from 'lucide-react';
+import { CheckCircle, XCircle, MoreVertical, ShieldCheck, User as UserIcon, Check, KeyRound, Crown, Search, FileCheck, FileX, UserCog, Eye, Loader2 } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -47,6 +47,8 @@ export default function AdminPage() {
   const [permissionUser, setPermissionUser] = React.useState<AppUser | null>(null);
   const [userSearchQuery, setUserSearchQuery] = React.useState('');
   const [viewingRequest, setViewingRequest] = React.useState<AccessRequest | null>(null);
+  const [isDialogLoading, setIsDialogLoading] = React.useState(false);
+
 
   React.useEffect(() => {
     const fetchData = async () => {
@@ -119,6 +121,23 @@ export default function AdminPage() {
         });
     });
   };
+
+  const handleViewDetails = async (requestId?: string) => {
+    if (!requestId) return;
+    setIsDialogLoading(true);
+    setViewingRequest({ id: requestId } as AccessRequest); // Open dialog with loading state
+    try {
+        const res = await fetch(`/api/access-requests/${requestId}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to fetch request details.");
+        setViewingRequest(data);
+    } catch (err: any) {
+        toast({ title: "Error", description: err.message, variant: "destructive" });
+        setViewingRequest(null); // Close dialog on error
+    } finally {
+        setIsDialogLoading(false);
+    }
+  };
   
   const handleRoleChange = (userId: string, role: string) => {
     const originalUsers = [...users];
@@ -183,6 +202,7 @@ export default function AdminPage() {
        />
        <RequestDetailsDialog
         request={viewingRequest}
+        isLoading={isDialogLoading}
         onOpenChange={(isOpen) => !isOpen && setViewingRequest(null)}
        />
        <AssignBucketsDialog
@@ -203,7 +223,7 @@ export default function AdminPage() {
                       <RequestsTable requests={filteredRequests} handleApprove={id => handleRequest(id, 'approved')} handleDeny={setDenialCandidate} getBadgeVariant={getBadgeVariant} isLoading={isLoading} />
                   </TabsContent>
                   <TabsContent value="logs">
-                      <LogsTable logs={logs} isLoading={isLoading} />
+                      <LogsTable logs={logs} isLoading={isLoading} onViewDetails={handleViewDetails} />
                   </TabsContent>
                   <TabsContent value="users">
                     <div className="flex justify-end mb-4">
@@ -267,7 +287,7 @@ const RequestsTable = ({ requests, handleApprove, handleDeny, getBadgeVariant, i
     </div>
 );
 
-const LogsTable = ({ logs, isLoading }: { logs: AuditLog[], isLoading: boolean }) => {
+const LogsTable = ({ logs, isLoading, onViewDetails }: { logs: AuditLog[], isLoading: boolean, onViewDetails: (requestId?: string) => void }) => {
     const renderEventIcon = (type: AuditLog['eventType']) => {
         switch (type) {
             case 'ACCESS_REQUEST_DECISION': return <FileCheck className="h-5 w-5" />;
@@ -323,13 +343,14 @@ const LogsTable = ({ logs, isLoading }: { logs: AuditLog[], isLoading: boolean }
                     <TableHead>Details</TableHead>
                     <TableHead>Actor</TableHead>
                     <TableHead>Timestamp</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
                 </TableHeader>
                 <TableBody>
                 {isLoading ? (
-                    Array.from({ length: 5 }).map((_, i) => (<TableRow key={i}><TableCell colSpan={4}><Skeleton className="h-8 w-full" /></TableCell></TableRow>))
+                    Array.from({ length: 5 }).map((_, i) => (<TableRow key={i}><TableCell colSpan={5}><Skeleton className="h-8 w-full" /></TableCell></TableRow>))
                 ) : logs.length === 0 ? (
-                    <TableRow><TableCell colSpan={4} className="h-24 text-center">No logs found.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={5} className="h-24 text-center">No logs found.</TableCell></TableRow>
                 ) : logs.map((log) => (
                     <TableRow key={log.id}>
                     <TableCell><div className="flex justify-center">{renderEventIcon(log.eventType)}</div></TableCell>
@@ -338,6 +359,20 @@ const LogsTable = ({ logs, isLoading }: { logs: AuditLog[], isLoading: boolean }
                     <TableCell>
                         <div className="font-medium">{format(parseISO(log.timestamp), 'PP')}</div>
                         <div className="text-sm text-muted-foreground">{format(parseISO(log.timestamp), 'p')}</div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                        {log.eventType === 'ACCESS_REQUEST_DECISION' && (
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon"><MoreVertical className="h-5 w-5" /></Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent>
+                                    <DropdownMenuItem onSelect={() => onViewDetails(log.target.requestId)}>
+                                        <Eye className="mr-2 h-4 w-4" /> View Details
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        )}
                     </TableCell>
                     </TableRow>
                 ))}

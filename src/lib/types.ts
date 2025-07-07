@@ -55,6 +55,7 @@ export type AccessRequest = {
   // Approval data
   approvedByUserId?: string | null;
   approvedByUserEmail?: string | null;
+  approvedByUserName?: string | null;
   approvedAt?: string | null; // ISO string format
 };
 
@@ -71,6 +72,7 @@ export type AuditLog = {
     userName?: string | null;
     userEmail?: string | null;
     bucketName?: string;
+    requestId?: string;
   };
   details: {
     status?: 'approved' | 'denied';

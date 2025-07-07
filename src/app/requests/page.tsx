@@ -22,13 +22,21 @@ import {
     TabsTrigger,
   } from "@/components/ui/tabs";
 import { Skeleton } from '@/components/ui/skeleton';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Info } from 'lucide-react';
+import { Info, MoreVertical, Eye } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Button } from '@/components/ui/button';
+import { RequestDetailsDialog } from '@/components/request-details-dialog';
 
 export default function MyRequestsPage() {
   const [requests, setRequests] = React.useState<AccessRequest[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [activeTab, setActiveTab] = React.useState('pending');
+  const [viewingRequest, setViewingRequest] = React.useState<AccessRequest | null>(null);
 
   React.useEffect(() => {
     const fetchRequests = async () => {
@@ -73,29 +81,33 @@ export default function MyRequestsPage() {
   });
 
   return (
+    <>
+    <RequestDetailsDialog
+        request={viewingRequest}
+        onOpenChange={(isOpen) => !isOpen && setViewingRequest(null)}
+    />
     <div className="flex flex-col h-full w-full">
       <Header title="My Access Requests" />
         <div className="p-4 md:p-6 flex-1 overflow-y-auto">
-            <TooltipProvider>
-                <Tabs value={activeTab} onValueChange={setActiveTab}>
-                    <TabsList className="mb-4">
-                        <TabsTrigger value="pending">Pending</TabsTrigger>
-                        <TabsTrigger value="historical">Historical</TabsTrigger>
-                    </TabsList>
-                    <TabsContent value="pending">
-                        <RequestsTable requests={filteredRequests} getBadgeVariant={getBadgeVariant} isLoading={isLoading} />
-                    </TabsContent>
-                    <TabsContent value="historical">
-                        <RequestsTable requests={filteredRequests} getBadgeVariant={getBadgeVariant} isLoading={isLoading} />
-                    </TabsContent>
-                </Tabs>
-            </TooltipProvider>
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+                <TabsList className="mb-4">
+                    <TabsTrigger value="pending">Pending</TabsTrigger>
+                    <TabsTrigger value="historical">Historical</TabsTrigger>
+                </TabsList>
+                <TabsContent value="pending">
+                    <RequestsTable requests={filteredRequests} getBadgeVariant={getBadgeVariant} isLoading={isLoading} onViewDetails={setViewingRequest} />
+                </TabsContent>
+                <TabsContent value="historical">
+                    <RequestsTable requests={filteredRequests} getBadgeVariant={getBadgeVariant} isLoading={isLoading} onViewDetails={setViewingRequest} />
+                </TabsContent>
+            </Tabs>
         </div>
     </div>
+    </>
   );
 }
 
-const RequestsTable = ({ requests, getBadgeVariant, isLoading }: { requests: AccessRequest[], getBadgeVariant: (status: AccessRequest['status']) => string, isLoading: boolean }) => (
+const RequestsTable = ({ requests, getBadgeVariant, isLoading, onViewDetails }: { requests: AccessRequest[], getBadgeVariant: (status: AccessRequest['status']) => string, isLoading: boolean, onViewDetails: (req: AccessRequest) => void }) => (
     <div className="border rounded-lg">
         <Table>
             <TableHeader>
@@ -103,48 +115,49 @@ const RequestsTable = ({ requests, getBadgeVariant, isLoading }: { requests: Acc
                 <TableHead>Bucket</TableHead>
                 <TableHead>Reason</TableHead>
                 <TableHead>Requested</TableHead>
-                <TableHead className="text-right">Status</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
             </TableRow>
             </TableHeader>
             <TableBody>
             {isLoading ? (
               Array.from({ length: 3 }).map((_, i) => (
                 <TableRow key={i}>
-                  <TableCell colSpan={4}><Skeleton className="h-8 w-full" /></TableCell>
+                  <TableCell colSpan={5}><Skeleton className="h-8 w-full" /></TableCell>
                 </TableRow>
               ))
             ) : requests.length === 0 ? (
                 <TableRow>
-                    <TableCell colSpan={4} className="h-24 text-center">You have not made any requests.</TableCell>
+                    <TableCell colSpan={5} className="h-24 text-center">You have not made any requests in this category.</TableCell>
                 </TableRow>
             ) : requests.map((req) => (
                 <TableRow key={req.id}>
-                <TableCell>
-                    <div className="font-medium">{req.bucketName}</div>
-                    <div className="text-sm text-muted-foreground">{req.region}</div>
-                </TableCell>
-                <TableCell className="max-w-xs truncate">{req.reason}</TableCell>
-                <TableCell>
-                    <div className="font-medium">{format(parseISO(req.requestedAt), 'PP')}</div>
-                    <div className="text-sm text-muted-foreground">{format(parseISO(req.requestedAt), 'p')}</div>
-                </TableCell>
-                <TableCell className="text-right">
-                    {req.status === 'denied' && req.denialReason ? (
-                        <Tooltip>
-                            <TooltipTrigger>
-                                <div className='flex items-center justify-end gap-2'>
-                                    <Badge className={getBadgeVariant(req.status)}>{req.status}</Badge>
-                                    <Info className="h-4 w-4 text-muted-foreground" />
-                                </div>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <p className='max-w-xs text-sm'>{req.denialReason}</p>
-                            </TooltipContent>
-                        </Tooltip>
-                    ) : (
+                    <TableCell>
+                        <div className="font-medium">{req.bucketName}</div>
+                        <div className="text-sm text-muted-foreground">{req.region}</div>
+                    </TableCell>
+                    <TableCell className="max-w-xs truncate">{req.reason}</TableCell>
+                    <TableCell>
+                        <div className="font-medium">{format(parseISO(req.requestedAt), 'PP')}</div>
+                        <div className="text-sm text-muted-foreground">{format(parseISO(req.requestedAt), 'p')}</div>
+                    </TableCell>
+                    <TableCell>
                         <Badge className={getBadgeVariant(req.status)}>{req.status}</Badge>
-                    )}
-                </TableCell>
+                    </TableCell>
+                    <TableCell className="text-right">
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon">
+                                    <MoreVertical className="h-5 w-5" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent>
+                                <DropdownMenuItem onSelect={() => onViewDetails(req)}>
+                                    <Eye className="mr-2 h-4 w-4" /> View Details
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </TableCell>
                 </TableRow>
             ))}
             </TableBody>
