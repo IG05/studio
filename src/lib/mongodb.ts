@@ -1,15 +1,20 @@
+
 import { Db, MongoClient, ObjectId } from "mongodb";
 
-const MONGODB_URI = process.env.MONGODB_URI;
+const MONGODB_USER = process.env.MONGODB_USER;
+const MONGODB_PASSWORD = process.env.MONGODB_PASSWORD;
+const MONGODB_HOST = process.env.MONGODB_HOST;
 const MONGODB_DB_NAME = process.env.MONGODB_DB_NAME;
 
-if (!MONGODB_URI) {
-  throw new Error("Please define the MONGODB_URI environment variable inside .env");
+if (!MONGODB_USER || !MONGODB_PASSWORD || !MONGODB_HOST || !MONGODB_DB_NAME) {
+  throw new Error(
+    "Please define MONGODB_USER, MONGODB_PASSWORD, MONGODB_HOST, and MONGODB_DB_NAME environment variables inside .env"
+  );
 }
 
-if (!MONGODB_DB_NAME) {
-    throw new Error("Please define the MONGODB_DB_NAME environment variable inside .env");
-}
+// Construct the URI, ensuring the password and user are properly encoded
+const MONGODB_URI = `mongodb+srv://${encodeURIComponent(MONGODB_USER)}:${encodeURIComponent(MONGODB_PASSWORD)}@${MONGODB_HOST}/?retryWrites=true&w=majority&appName=Cluster0`;
+
 
 let cachedClient: MongoClient | null = null;
 let cachedDb: Db | null = null;
@@ -19,7 +24,7 @@ export async function connectToDatabase() {
     return { client: cachedClient, db: cachedDb };
   }
 
-  const client = new MongoClient(MONGODB_URI!);
+  const client = new MongoClient(MONGODB_URI);
 
   await client.connect();
 
