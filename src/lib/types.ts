@@ -40,6 +40,7 @@ export type AccessRequest = {
   bucketName: string;
   region: string;
   reason: string;
+  durationInMinutes: number;
   requestedAt: string; // ISO string format
   status: 'pending' | 'approved' | 'denied';
   denialReason?: string | null;
@@ -53,7 +54,6 @@ export type AccessRequest = {
 
   // Approval data
   approvedByUserId?: string | null;
-  approvedByUserName?: string | null;
   approvedByUserEmail?: string | null;
   approvedAt?: string | null; // ISO string format
 };

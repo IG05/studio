@@ -3,7 +3,6 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import type { NextRequest } from 'next/server';
-import { add } from 'date-fns';
 import { connectToDatabase, fromMongo } from '@/lib/mongodb';
 
 export async function GET() {
@@ -62,8 +61,9 @@ export async function POST(request: NextRequest) {
             bucketName,
             region,
             reason,
+            durationInMinutes,
             status: 'pending',
-            expiresAt: add(new Date(), { minutes: durationInMinutes }),
+            expiresAt: null,
             requestedAt: new Date(),
             // Denormalize user data for easier access
             userId: session.user.id,

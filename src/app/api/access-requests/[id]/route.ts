@@ -4,6 +4,7 @@ import type { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { connectToDatabase, toObjectId, fromMongo } from '@/lib/mongodb';
+import { add } from 'date-fns';
 
 
 export async function PATCH(
@@ -36,16 +37,28 @@ export async function PATCH(
     try {
         const { db } = await connectToDatabase();
         
+        const requestToUpdate = await db.collection('accessRequests').findOne({ _id: objectId });
+        if (!requestToUpdate) {
+            return NextResponse.json({ error: 'Request not found' }, { status: 404 });
+        }
+
         const updatePayload: any = { $set: { status } };
+        
         if (status === 'approved') {
-            updatePayload.$unset = { denialReason: "" };
+            const durationInMinutes = requestToUpdate.durationInMinutes;
+            if (typeof durationInMinutes !== 'number') {
+                 return NextResponse.json({ error: 'Request is missing duration information.' }, { status: 400 });
+            }
+
+            updatePayload.$set.expiresAt = add(new Date(), { minutes: durationInMinutes });
             updatePayload.$set.approvedAt = new Date();
             updatePayload.$set.approvedByUserId = session.user.id;
-            updatePayload.$set.approvedByUserName = session.user.name;
             updatePayload.$set.approvedByUserEmail = session.user.email;
-        } else {
+            updatePayload.$unset = { denialReason: "", approvedByUserName: "" };
+
+        } else { // status === 'denied'
             updatePayload.$set.denialReason = denialReason;
-            updatePayload.$unset = { approvedAt: "", approvedByUserId: "", approvedByUserName: "", approvedByUserEmail: "" };
+            updatePayload.$unset = { approvedAt: "", approvedByUserId: "", approvedByUserName: "", approvedByUserEmail: "", expiresAt: "" };
         }
         
         const result = await db.collection('accessRequests').findOneAndUpdate(
