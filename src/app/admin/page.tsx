@@ -17,7 +17,7 @@ import { Header } from '@/components/header';
 import type { AccessRequest, AppUser, AuditLog } from '@/lib/types';
 import { format, parseISO } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
-import { CheckCircle, XCircle, MoreVertical, ShieldCheck, User as UserIcon, Check, KeyRound, Crown, Search, FileCheck, FileX, UserCog, Eye, Loader2 } from 'lucide-react';
+import { CheckCircle, XCircle, MoreVertical, ShieldCheck, User as UserIcon, Check, KeyRound, Crown, Search, FileCheck, UserCog, Eye } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,6 +32,8 @@ import {
   } from "@/components/ui/tabs";
 import { Skeleton } from '@/components/ui/skeleton';
 import { DenyRequestDialog } from '@/components/deny-request-dialog';
+import { ApproveRequestDialog } from '@/components/approve-request-dialog';
+import { ChangeRoleDialog } from '@/components/change-role-dialog';
 import { useSession } from 'next-auth/react';
 import { AssignBucketsDialog } from '@/components/assign-buckets-dialog';
 import { Input } from '@/components/ui/input';
@@ -44,79 +46,75 @@ export default function AdminPage() {
   const [isLoading, setIsLoading] = React.useState(true);
   const [activeTab, setActiveTab] = React.useState('pending');
   const [denialCandidate, setDenialCandidate] = React.useState<AccessRequest | null>(null);
+  const [approvalCandidate, setApprovalCandidate] = React.useState<AccessRequest | null>(null);
+  const [roleChangeCandidate, setRoleChangeCandidate] = React.useState<{ user: AppUser; role: 'ADMIN' | 'USER' } | null>(null);
   const [permissionUser, setPermissionUser] = React.useState<AppUser | null>(null);
   const [userSearchQuery, setUserSearchQuery] = React.useState('');
   const [viewingRequest, setViewingRequest] = React.useState<AccessRequest | null>(null);
   const [isDialogLoading, setIsDialogLoading] = React.useState(false);
 
+  const fetchAllData = React.useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const [requestsRes, usersRes, logsRes] = await Promise.all([
+        fetch('/api/access-requests'),
+        fetch('/api/users'),
+        fetch('/api/audit-logs'),
+      ]);
 
-  React.useEffect(() => {
-    const fetchData = async () => {
-      setIsLoading(true);
-      try {
-        const [requestsRes, usersRes, logsRes] = await Promise.all([
-          fetch('/api/access-requests'),
-          fetch('/api/users'),
-          fetch('/api/audit-logs'),
-        ]);
+      const requestsData = await requestsRes.json();
+      const usersData = await usersRes.json();
+      const logsData = await logsRes.json();
+      
+      if (!requestsRes.ok) throw new Error(requestsData.error || 'Failed to fetch access requests.');
+      if (!usersRes.ok) throw new Error(usersData.error || 'Failed to fetch users.');
+      if (!logsRes.ok) throw new Error(logsData.error || 'Failed to fetch logs.');
 
-        const requestsData = await requestsRes.json();
-        const usersData = await usersRes.json();
-        const logsData = await logsRes.json();
-        
-        if (!requestsRes.ok) throw new Error(requestsData.error || 'Failed to fetch access requests.');
-        if (!usersRes.ok) throw new Error(usersData.error || 'Failed to fetch users.');
-        if (!logsRes.ok) throw new Error(logsData.error || 'Failed to fetch logs.');
+      setRequests(Array.isArray(requestsData) ? requestsData : []);
+      setUsers(Array.isArray(usersData) ? usersData : []);
+      setLogs(Array.isArray(logsData) ? logsData : []);
 
-        setRequests(Array.isArray(requestsData) ? requestsData : []);
-        setUsers(Array.isArray(usersData) ? usersData : []);
-        setLogs(Array.isArray(logsData) ? logsData : []);
-
-      } catch (err: any) {
-        console.error("Failed to fetch admin data", err);
-        setRequests([]);
-        setUsers([]);
-        setLogs([]);
-        toast({
-          title: 'Error',
-          description: err.message || 'Could not fetch admin data.',
-          variant: 'destructive',
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchData();
+    } catch (err: any) {
+      console.error("Failed to fetch admin data", err);
+      setRequests([]);
+      setUsers([]);
+      setLogs([]);
+      toast({
+        title: 'Error',
+        description: err.message || 'Could not fetch admin data.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
-  const handleRequest = (requestId: string, status: 'approved' | 'denied', reason?: string) => {
-    const originalRequests = [...requests];
-    
-    setRequests((prev) => prev.filter((req) => req.id !== requestId));
+  React.useEffect(() => {
+    fetchAllData();
+  }, [fetchAllData]);
 
+  const handleRequest = (requestId: string, status: 'approved' | 'denied', reason: string) => {
     fetch(`/api/access-requests/${requestId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status, denialReason: reason }),
+        body: JSON.stringify({ status, reason }),
     })
     .then(res => {
-        if (!res.ok) throw new Error("Failed to update");
+        if (!res.ok) throw res.json();
         return res.json();
     })
     .then(updatedRequest => {
-        // After successful update, re-fetch logs to show the new entry
-        fetch('/api/audit-logs').then(res => res.json()).then(setLogs);
         toast({
             title: `Request ${status}`,
             description: `The access request has been successfully ${status}.`,
         });
+        fetchAllData(); // Refetch all data to ensure consistency
     })
-    .catch(() => {
-        setRequests(originalRequests);
+    .catch(async (err) => {
+        const error = await err;
         toast({
             title: 'Error',
-            description: 'Failed to update access request.',
+            description: error.error || 'Failed to update access request.',
             variant: 'destructive',
         });
     });
@@ -139,29 +137,25 @@ export default function AdminPage() {
     }
   };
   
-  const handleRoleChange = (userId: string, role: string) => {
-    const originalUsers = [...users];
-    setUsers((prev) => prev.map(u => u.id === userId ? { ...u, role: role as AppUser['role'] } : u));
+  const handleRoleChange = (userId: string, role: string, reason: string) => {
     fetch(`/api/users/${userId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role }),
+        body: JSON.stringify({ role, reason }),
     })
     .then(res => {
         if (!res.ok) throw res.json();
         return res.json();
     })
     .then(updatedUser => {
-        setUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
-        fetch('/api/audit-logs').then(res => res.json()).then(setLogs); // Refresh logs
         toast({
             title: 'User Updated',
             description: `User role has been successfully changed to ${role}.`,
         });
+        fetchAllData(); // Refetch all data
     })
     .catch(async (err) => {
         const error = await err;
-        setUsers(originalUsers);
         toast({
             title: 'Error',
             description: error.error || 'Failed to update user role.',
@@ -171,16 +165,7 @@ export default function AdminPage() {
   }
 
   const handlePermissionsChange = () => {
-    // Refresh logs after permission change
-    fetch('/api/audit-logs').then(res => res.json()).then(setLogs);
-  };
-
-  const getBadgeVariant = (status: AccessRequest['status']) => {
-    switch (status) {
-      case 'approved': return 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300';
-      case 'denied': return 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300';
-      case 'pending': default: return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300';
-    }
+    fetchAllData();
   };
 
   const filteredRequests = requests.filter(req => req.status === 'pending');
@@ -200,6 +185,16 @@ export default function AdminPage() {
         onOpenChange={(isOpen) => !isOpen && setDenialCandidate(null)}
         onConfirm={(reason) => { if(denialCandidate) { handleRequest(denialCandidate.id, 'denied', reason) }}}
        />
+      <ApproveRequestDialog
+        request={approvalCandidate}
+        onOpenChange={(isOpen) => !isOpen && setApprovalCandidate(null)}
+        onConfirm={(reason) => { if(approvalCandidate) { handleRequest(approvalCandidate.id, 'approved', reason) }}}
+      />
+      <ChangeRoleDialog
+        candidate={roleChangeCandidate}
+        onOpenChange={(isOpen) => !isOpen && setRoleChangeCandidate(null)}
+        onConfirm={(reason) => { if(roleChangeCandidate) { handleRoleChange(roleChangeCandidate.user.id, roleChangeCandidate.role, reason) }}}
+      />
        <RequestDetailsDialog
         request={viewingRequest}
         isLoading={isDialogLoading}
@@ -220,7 +215,7 @@ export default function AdminPage() {
                       <TabsTrigger value="users">User Management</TabsTrigger>
                   </TabsList>
                   <TabsContent value="pending">
-                      <RequestsTable requests={filteredRequests} handleApprove={id => handleRequest(id, 'approved')} handleDeny={setDenialCandidate} getBadgeVariant={getBadgeVariant} isLoading={isLoading} />
+                      <RequestsTable requests={filteredRequests} handleApprove={setApprovalCandidate} handleDeny={setDenialCandidate} isLoading={isLoading} />
                   </TabsContent>
                   <TabsContent value="logs">
                       <LogsTable logs={logs} isLoading={isLoading} onViewDetails={handleViewDetails} />
@@ -232,7 +227,7 @@ export default function AdminPage() {
                         <Input placeholder="Search by name or email..." className="pl-9" value={userSearchQuery} onChange={(e) => setUserSearchQuery(e.target.value)} />
                       </div>
                     </div>
-                      <UsersTable users={filteredUsers} onRoleChange={handleRoleChange} onAssignBuckets={setPermissionUser} isLoading={isLoading} />
+                      <UsersTable users={filteredUsers} onRoleChange={(user, role) => setRoleChangeCandidate({ user, role })} onAssignBuckets={setPermissionUser} isLoading={isLoading} />
                   </TabsContent>
               </Tabs>
           </div>
@@ -241,7 +236,7 @@ export default function AdminPage() {
   );
 }
 
-const RequestsTable = ({ requests, handleApprove, handleDeny, getBadgeVariant, isLoading }: { requests: AccessRequest[], handleApprove: (id: string) => void, handleDeny: (req: AccessRequest) => void, getBadgeVariant: (status: AccessRequest['status']) => string, isLoading: boolean }) => (
+const RequestsTable = ({ requests, handleApprove, handleDeny, isLoading }: { requests: AccessRequest[], handleApprove: (req: AccessRequest) => void, handleDeny: (req: AccessRequest) => void, isLoading: boolean }) => (
     <div className="border rounded-lg">
         <Table>
             <TableHeader>
@@ -276,7 +271,7 @@ const RequestsTable = ({ requests, handleApprove, handleDeny, getBadgeVariant, i
                 </TableCell>
                 <TableCell className="text-right">
                     <div className="flex gap-2 justify-end">
-                        <Button variant="ghost" size="icon" className="text-green-600 hover:text-green-600 hover:bg-green-100 dark:hover:bg-green-900/50" onClick={() => handleApprove(req.id)}><CheckCircle className="h-5 w-5" /></Button>
+                        <Button variant="ghost" size="icon" className="text-green-600 hover:text-green-600 hover:bg-green-100 dark:hover:bg-green-900/50" onClick={() => handleApprove(req)}><CheckCircle className="h-5 w-5" /></Button>
                         <Button variant="ghost" size="icon" className="text-red-600 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/50" onClick={() => handleDeny(req)}><XCircle className="h-5 w-5" /></Button>
                     </div>
                 </TableCell>
@@ -298,6 +293,7 @@ const LogsTable = ({ logs, isLoading, onViewDetails }: { logs: AuditLog[], isLoa
     };
 
     const renderDetails = (log: AuditLog) => {
+        const reasonHtml = log.details.reason ? <p className="text-xs text-muted-foreground">Reason: {log.details.reason}</p> : null;
         switch (log.eventType) {
             case 'ACCESS_REQUEST_DECISION':
                 return (
@@ -307,7 +303,7 @@ const LogsTable = ({ logs, isLoading, onViewDetails }: { logs: AuditLog[], isLoa
                         <span className="font-semibold">{log.target.userName || log.target.userEmail}</span>
                         <span> to bucket </span>
                         <span className="font-semibold">{log.target.bucketName}</span>.
-                        {log.details.denialReason && <p className="text-xs text-muted-foreground">Reason: {log.details.denialReason}</p>}
+                        {reasonHtml}
                     </div>
                 );
             case 'ROLE_CHANGE':
@@ -319,6 +315,7 @@ const LogsTable = ({ logs, isLoading, onViewDetails }: { logs: AuditLog[], isLoa
                         <Badge variant="secondary">{log.details.fromRole}</Badge>
                         <span> to </span>
                         <Badge variant="secondary">{log.details.toRole}</Badge>.
+                        {reasonHtml}
                     </div>
                 );
             case 'PERMISSIONS_CHANGE':
@@ -327,6 +324,7 @@ const LogsTable = ({ logs, isLoading, onViewDetails }: { logs: AuditLog[], isLoa
                         <p>Updated permanent permissions for <span className="font-semibold">{log.target.userName || log.target.userEmail}</span>.</p>
                         {log.details.addedBuckets && log.details.addedBuckets.length > 0 && <p className="text-xs text-green-600">Added: {log.details.addedBuckets.join(', ')}</p>}
                         {log.details.removedBuckets && log.details.removedBuckets.length > 0 && <p className="text-xs text-red-600">Removed: {log.details.removedBuckets.join(', ')}</p>}
+                        {reasonHtml}
                     </div>
                 );
             default:
@@ -382,7 +380,7 @@ const LogsTable = ({ logs, isLoading, onViewDetails }: { logs: AuditLog[], isLoa
     );
 };
 
-const UsersTable = ({ users, onRoleChange, onAssignBuckets, isLoading }: { users: AppUser[], onRoleChange: (userId: string, role: string) => void, onAssignBuckets: (user: AppUser) => void, isLoading: boolean }) => {
+const UsersTable = ({ users, onRoleChange, onAssignBuckets, isLoading }: { users: AppUser[], onRoleChange: (user: AppUser, role: 'ADMIN' | 'USER') => void, onAssignBuckets: (user: AppUser) => void, isLoading: boolean }) => {
     const { data: session } = useSession();
     const isOwner = session?.user?.role === 'owner';
     
@@ -423,10 +421,10 @@ const UsersTable = ({ users, onRoleChange, onAssignBuckets, isLoading }: { users
                                         </Button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent>
-                                        <DropdownMenuItem onClick={() => onRoleChange(user.id, 'ADMIN')} disabled={!isOwner || user.role === 'ADMIN'}>
+                                        <DropdownMenuItem onClick={() => onRoleChange(user, 'ADMIN')} disabled={!isOwner || user.role === 'ADMIN'}>
                                             <ShieldCheck className="mr-2 h-4 w-4" /> Make Admin {user.role === 'ADMIN' && <Check className="ml-auto h-4 w-4" />}
                                         </DropdownMenuItem>
-                                        <DropdownMenuItem onClick={() => onRoleChange(user.id, 'USER')} disabled={!isOwner || user.role === 'USER'}>
+                                        <DropdownMenuItem onClick={() => onRoleChange(user, 'USER')} disabled={!isOwner || user.role === 'USER'}>
                                             <UserIcon className="mr-2 h-4 w-4" /> Make User {user.role === 'USER' && <Check className="ml-auto h-4 w-4" />}
                                         </DropdownMenuItem>
                                         <DropdownMenuItem onClick={() => onAssignBuckets(user)} disabled={user.role === 'ADMIN' || user.role === 'OWNER'}>

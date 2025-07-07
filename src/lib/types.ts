@@ -44,6 +44,7 @@ export type AccessRequest = {
   requestedAt: string; // ISO string format
   status: 'pending' | 'approved' | 'denied';
   denialReason?: string | null;
+  approvalReason?: string | null;
   expiresAt?: string | null; // ISO string format
 
   // Denormalized user data
@@ -76,7 +77,7 @@ export type AuditLog = {
   };
   details: {
     status?: 'approved' | 'denied';
-    denialReason?: string | null;
+    reason?: string;
     fromRole?: 'OWNER' | 'ADMIN' | 'USER';
     toRole?: 'OWNER' | 'ADMIN' | 'USER';
     addedBuckets?: string[];

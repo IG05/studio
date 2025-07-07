@@ -1,3 +1,4 @@
+
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
@@ -19,26 +20,30 @@ export async function PATCH(
         return NextResponse.json({ error: 'Invalid user ID format' }, { status: 400 });
     }
 
-    const { db } = await connectToDatabase();
-    const usersCollection = db.collection('users');
-
-    // Fetch user before update to get original role for logging
-    const userToUpdate = await usersCollection.findOne({ _id: userToUpdateId });
-    if (!userToUpdate) {
-        return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
-
-    // Admins cannot change their own role
-    if (userToUpdate?.uid === session.user.id) {
-        return NextResponse.json({ error: 'Admins cannot change their own role.' }, { status: 400 });
-    }
-
     try {
         const body = await request.json();
-        const { role } = body;
+        const { role, reason } = body;
 
         if (role !== 'ADMIN' && role !== 'USER') {
             return NextResponse.json({ error: 'Invalid role provided.' }, { status: 400 });
+        }
+
+        if (!reason || typeof reason !== 'string' || reason.length < 10) {
+            return NextResponse.json({ error: 'A reason of at least 10 characters is required.' }, { status: 400 });
+        }
+
+        const { db } = await connectToDatabase();
+        const usersCollection = db.collection('users');
+
+        // Fetch user before update to get original role for logging
+        const userToUpdate = await usersCollection.findOne({ _id: userToUpdateId });
+        if (!userToUpdate) {
+            return NextResponse.json({ error: 'User not found' }, { status: 404 });
+        }
+
+        // Admins cannot change their own role
+        if (userToUpdate.uid === session.user.id) {
+            return NextResponse.json({ error: 'Admins cannot change their own role.' }, { status: 400 });
         }
         
         const originalRole = userToUpdate.role;
@@ -60,7 +65,7 @@ export async function PATCH(
             eventType: 'ROLE_CHANGE',
             actor: { userId: session.user.id, email: session.user.email },
             target: { userId: params.id, userEmail: userToUpdate.email, userName: userToUpdate.name },
-            details: { fromRole: originalRole, toRole: role }
+            details: { fromRole: originalRole, toRole: role, reason }
         };
         await db.collection('auditLogs').insertOne(logEntry);
 

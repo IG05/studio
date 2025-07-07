@@ -56,14 +56,14 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    const { status, denialReason } = body;
+    const { status, reason } = body;
 
     if (status !== 'approved' && status !== 'denied') {
         return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
     }
-
-    if (status === 'denied' && !denialReason) {
-        return NextResponse.json({ error: 'Denial reason is required' }, { status: 400 });
+    
+    if (!reason || typeof reason !== 'string' || reason.length < 10) {
+        return NextResponse.json({ error: 'A reason of at least 10 characters is required.' }, { status: 400 });
     }
 
     try {
@@ -88,11 +88,12 @@ export async function PATCH(
             updatePayload.$set.approvedByUserId = session.user.id;
             updatePayload.$set.approvedByUserEmail = session.user.email;
             updatePayload.$set.approvedByUserName = session.user.name;
+            updatePayload.$set.approvalReason = reason;
             updatePayload.$unset = { denialReason: "" };
 
         } else { // status === 'denied'
-            updatePayload.$set.denialReason = denialReason;
-            updatePayload.$unset = { approvedAt: "", approvedByUserId: "", approvedByUserEmail: "", approvedByUserName: "", expiresAt: "" };
+            updatePayload.$set.denialReason = reason;
+            updatePayload.$unset = { approvedAt: "", approvedByUserId: "", approvedByUserEmail: "", approvedByUserName: "", expiresAt: "", approvalReason: "" };
         }
         
         const result = await accessRequestsCollection.findOneAndUpdate(
@@ -122,7 +123,7 @@ export async function PATCH(
             },
             details: {
               status,
-              denialReason: denialReason || null,
+              reason,
             }
         };
         await db.collection('auditLogs').insertOne(logEntry);

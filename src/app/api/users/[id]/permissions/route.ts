@@ -44,10 +44,14 @@ export async function POST(
     }
 
     const { id: userId } = params;
-    const { buckets } = await request.json();
+    const { buckets, reason } = await request.json();
 
     if (!Array.isArray(buckets)) {
         return NextResponse.json({ error: 'Invalid payload, buckets must be an array.' }, { status: 400 });
+    }
+
+    if (!reason || typeof reason !== 'string' || reason.length < 10) {
+        return NextResponse.json({ error: 'A reason of at least 10 characters is required.' }, { status: 400 });
     }
 
     try {
@@ -88,7 +92,7 @@ export async function POST(
                 eventType: 'PERMISSIONS_CHANGE',
                 actor: { userId: session.user.id, email: session.user.email },
                 target: { userId: userId, userEmail: targetUser.email, userName: targetUser.name },
-                details: { addedBuckets, removedBuckets }
+                details: { addedBuckets, removedBuckets, reason }
             };
             await db.collection('auditLogs').insertOne(logEntry);
         }

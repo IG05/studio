@@ -12,7 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from '@/components/ui/badge';
 import type { AccessRequest } from '@/lib/types';
 import { format, parseISO } from 'date-fns';
-import { User, Calendar, Clock, Lock, Unlock, ShieldQuestion, Ban, CheckCircle, Loader2 } from 'lucide-react';
+import { User, Calendar, Clock, Lock, Unlock, ShieldQuestion, Ban, CheckCircle, Loader2, MessageSquareQuote } from 'lucide-react';
 
 interface RequestDetailsDialogProps {
   request: AccessRequest | null;
@@ -108,11 +108,14 @@ export function RequestDetailsDialog({ request, isLoading, onOpenChange }: Reque
                         <p className="font-medium">{formatDisplayDate(request.requestedAt)}</p>
                     </div>
                 </div>
-            </div>
 
-            <div className="grid gap-2 p-4 border rounded-lg">
-                <p className="text-sm font-semibold">Justification</p>
-                <p className="text-sm text-muted-foreground p-2 bg-muted rounded-md">{request.reason}</p>
+                <div className="flex items-start gap-4">
+                    <MessageSquareQuote className="h-5 w-5 mt-1 text-muted-foreground" />
+                    <div>
+                        <p className="text-sm text-muted-foreground">User's Justification</p>
+                        <p className="font-medium">{request.reason}</p>
+                    </div>
+                </div>
             </div>
 
             {request.status === 'approved' && (
@@ -125,6 +128,15 @@ export function RequestDetailsDialog({ request, isLoading, onOpenChange }: Reque
                             <p className="text-xs text-muted-foreground">{formatDisplayDate(request.approvedAt)}</p>
                         </div>
                     </div>
+                    {request.approvalReason && (
+                        <div className="flex items-start gap-4">
+                            <MessageSquareQuote className="h-5 w-5 mt-1 text-green-600 dark:text-green-400" />
+                            <div>
+                                <p className="text-sm text-muted-foreground">Approver's Reason</p>
+                                <p className="font-medium">{request.approvalReason}</p>
+                            </div>
+                        </div>
+                    )}
                     <div className="flex items-start gap-4">
                         <Clock className="h-5 w-5 mt-1 text-green-600 dark:text-green-400" />
                         <div>
@@ -134,18 +146,17 @@ export function RequestDetailsDialog({ request, isLoading, onOpenChange }: Reque
                     </div>
                 </div>
             )}
-            {request.status === 'denied' && request.denialReason && (
+            {request.status === 'denied' && (
                  <div className="grid gap-2 p-4 border rounded-lg bg-red-50 dark:bg-red-900/20">
                     <div className="flex items-start gap-4">
                         <Ban className="h-5 w-5 mt-1 text-red-600 dark:text-red-400" />
                         <div>
                             <p className="text-sm text-muted-foreground">Denial Reason</p>
-                            <p className="font-medium">{request.denialReason}</p>
+                            <p className="font-medium">{request.denialReason || "No reason provided."}</p>
                         </div>
                     </div>
                 </div>
             )}
-
         </div>
         </>
     )
