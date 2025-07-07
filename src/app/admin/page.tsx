@@ -14,11 +14,10 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Header } from '@/components/header';
-import type { AccessRequest } from '@/lib/types';
-import type { AppUser } from '@/lib/types';
+import type { AccessRequest, AppUser, AuditLog } from '@/lib/types';
 import { format, parseISO } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
-import { CheckCircle, XCircle, MoreVertical, ShieldCheck, User as UserIcon, Check, KeyRound, Crown, Search } from 'lucide-react';
+import { CheckCircle, XCircle, MoreVertical, ShieldCheck, User as UserIcon, Check, KeyRound, Crown, Search, FileCheck, FileX, UserCog } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,21 +37,10 @@ import { AssignBucketsDialog } from '@/components/assign-buckets-dialog';
 import { Input } from '@/components/ui/input';
 import { RequestDetailsDialog } from '@/components/request-details-dialog';
 
-const formatExpiresAt = (expiresAt: string | null | undefined) => {
-    if (!expiresAt) return 'Permanent';
-    try {
-        const date = parseISO(expiresAt);
-        return format(date, 'PPp');
-    } catch (error) {
-        console.error("Invalid date for expiresAt:", expiresAt);
-        return 'Invalid Date';
-    }
-};
-
-
 export default function AdminPage() {
   const [requests, setRequests] = React.useState<AccessRequest[]>([]);
   const [users, setUsers] = React.useState<AppUser[]>([]);
+  const [logs, setLogs] = React.useState<AuditLog[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [activeTab, setActiveTab] = React.useState('pending');
   const [denialCandidate, setDenialCandidate] = React.useState<AccessRequest | null>(null);
@@ -64,30 +52,29 @@ export default function AdminPage() {
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        const [requestsRes, usersRes] = await Promise.all([
+        const [requestsRes, usersRes, logsRes] = await Promise.all([
           fetch('/api/access-requests'),
           fetch('/api/users'),
+          fetch('/api/audit-logs'),
         ]);
 
-        if (!requestsRes.ok) {
-          const errorData = await requestsRes.json().catch(() => ({ error: 'Failed to parse error response' }));
-          throw new Error(errorData.error || 'Failed to fetch access requests.');
-        }
         const requestsData = await requestsRes.json();
-        
-        if (!usersRes.ok) {
-          const errorData = await usersRes.json().catch(() => ({ error: 'Failed to parse error response' }));
-          throw new Error(errorData.error || 'Failed to fetch users.');
-        }
         const usersData = await usersRes.json();
+        const logsData = await logsRes.json();
+        
+        if (!requestsRes.ok) throw new Error(requestsData.error || 'Failed to fetch access requests.');
+        if (!usersRes.ok) throw new Error(usersData.error || 'Failed to fetch users.');
+        if (!logsRes.ok) throw new Error(logsData.error || 'Failed to fetch logs.');
 
         setRequests(Array.isArray(requestsData) ? requestsData : []);
         setUsers(Array.isArray(usersData) ? usersData : []);
+        setLogs(Array.isArray(logsData) ? logsData : []);
 
       } catch (err: any) {
         console.error("Failed to fetch admin data", err);
         setRequests([]);
         setUsers([]);
+        setLogs([]);
         toast({
           title: 'Error',
           description: err.message || 'Could not fetch admin data.',
@@ -104,10 +91,7 @@ export default function AdminPage() {
   const handleRequest = (requestId: string, status: 'approved' | 'denied', reason?: string) => {
     const originalRequests = [...requests];
     
-    // Optimistic update
-    setRequests((prev) =>
-      prev.map((req) => (req.id === requestId ? { ...req, status, denialReason: reason } : req))
-    );
+    setRequests((prev) => prev.filter((req) => req.id !== requestId));
 
     fetch(`/api/access-requests/${requestId}`, {
         method: 'PATCH',
@@ -119,15 +103,14 @@ export default function AdminPage() {
         return res.json();
     })
     .then(updatedRequest => {
-        // After successful update, re-fetch all requests to get the latest data including approver info
-        fetch('/api/access-requests').then(res => res.json()).then(setRequests);
+        // After successful update, re-fetch logs to show the new entry
+        fetch('/api/audit-logs').then(res => res.json()).then(setLogs);
         toast({
             title: `Request ${status}`,
             description: `The access request has been successfully ${status}.`,
         });
     })
     .catch(() => {
-        // Rollback on error
         setRequests(originalRequests);
         toast({
             title: 'Error',
@@ -139,9 +122,7 @@ export default function AdminPage() {
   
   const handleRoleChange = (userId: string, role: string) => {
     const originalUsers = [...users];
-
     setUsers((prev) => prev.map(u => u.id === userId ? { ...u, role: role as AppUser['role'] } : u));
-
     fetch(`/api/users/${userId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -153,6 +134,7 @@ export default function AdminPage() {
     })
     .then(updatedUser => {
         setUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
+        fetch('/api/audit-logs').then(res => res.json()).then(setLogs); // Refresh logs
         toast({
             title: 'User Updated',
             description: `User role has been successfully changed to ${role}.`,
@@ -169,28 +151,23 @@ export default function AdminPage() {
     });
   }
 
+  const handlePermissionsChange = () => {
+    // Refresh logs after permission change
+    fetch('/api/audit-logs').then(res => res.json()).then(setLogs);
+  };
+
   const getBadgeVariant = (status: AccessRequest['status']) => {
     switch (status) {
-      case 'approved':
-        return 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300';
-      case 'denied':
-        return 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300';
-      case 'pending':
-      default:
-        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300';
+      case 'approved': return 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300';
+      case 'denied': return 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300';
+      case 'pending': default: return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300';
     }
   };
 
-  const filteredRequests = requests.filter(req => {
-    if (activeTab === 'pending') return req.status === 'pending';
-    if (activeTab === 'historical') return req.status === 'approved' || req.status === 'denied';
-    return true;
-  });
+  const filteredRequests = requests.filter(req => req.status === 'pending');
 
   const filteredUsers = React.useMemo(() => {
-    if (!userSearchQuery) {
-      return users;
-    }
+    if (!userSearchQuery) return users;
     return users.filter(user =>
       (user.name?.toLowerCase() || '').includes(userSearchQuery.toLowerCase()) ||
       (user.email?.toLowerCase() || '').includes(userSearchQuery.toLowerCase())
@@ -202,11 +179,7 @@ export default function AdminPage() {
       <DenyRequestDialog
         request={denialCandidate}
         onOpenChange={(isOpen) => !isOpen && setDenialCandidate(null)}
-        onConfirm={(reason) => {
-            if(denialCandidate) {
-                handleRequest(denialCandidate.id, 'denied', reason)
-            }
-        }}
+        onConfirm={(reason) => { if(denialCandidate) { handleRequest(denialCandidate.id, 'denied', reason) }}}
        />
        <RequestDetailsDialog
         request={viewingRequest}
@@ -215,6 +188,7 @@ export default function AdminPage() {
        <AssignBucketsDialog
         user={permissionUser}
         onOpenChange={(isOpen) => !isOpen && setPermissionUser(null)}
+        onPermissionsChanged={handlePermissionsChange}
        />
       <div className="flex flex-col h-full w-full">
         <Header title="Admin Dashboard" />
@@ -222,25 +196,20 @@ export default function AdminPage() {
               <Tabs value={activeTab} onValueChange={setActiveTab}>
                   <TabsList className="mb-4">
                       <TabsTrigger value="pending">Pending Requests</TabsTrigger>
-                      <TabsTrigger value="historical">Request History</TabsTrigger>
+                      <TabsTrigger value="logs">Access Logs</TabsTrigger>
                       <TabsTrigger value="users">User Management</TabsTrigger>
                   </TabsList>
                   <TabsContent value="pending">
-                      <RequestsTable requests={filteredRequests} handleApprove={id => handleRequest(id, 'approved')} handleDeny={setDenialCandidate} getBadgeVariant={getBadgeVariant} isLoading={isLoading} onViewDetails={setViewingRequest}/>
+                      <RequestsTable requests={filteredRequests} handleApprove={id => handleRequest(id, 'approved')} handleDeny={setDenialCandidate} getBadgeVariant={getBadgeVariant} isLoading={isLoading} />
                   </TabsContent>
-                  <TabsContent value="historical">
-                      <RequestsTable requests={filteredRequests} handleApprove={id => handleRequest(id, 'approved')} handleDeny={setDenialCandidate} getBadgeVariant={getBadgeVariant} isLoading={isLoading} onViewDetails={setViewingRequest} />
+                  <TabsContent value="logs">
+                      <LogsTable logs={logs} isLoading={isLoading} />
                   </TabsContent>
                   <TabsContent value="users">
                     <div className="flex justify-end mb-4">
                       <div className="relative w-full max-w-sm">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          placeholder="Search by name or email..."
-                          className="pl-9"
-                          value={userSearchQuery}
-                          onChange={(e) => setUserSearchQuery(e.target.value)}
-                        />
+                        <Input placeholder="Search by name or email..." className="pl-9" value={userSearchQuery} onChange={(e) => setUserSearchQuery(e.target.value)} />
                       </div>
                     </div>
                       <UsersTable users={filteredUsers} onRoleChange={handleRoleChange} onAssignBuckets={setPermissionUser} isLoading={isLoading} />
@@ -252,7 +221,7 @@ export default function AdminPage() {
   );
 }
 
-const RequestsTable = ({ requests, handleApprove, handleDeny, getBadgeVariant, isLoading, onViewDetails }: { requests: AccessRequest[], handleApprove: (id: string) => void, handleDeny: (req: AccessRequest) => void, getBadgeVariant: (status: AccessRequest['status']) => string, isLoading: boolean, onViewDetails: (req: AccessRequest) => void }) => (
+const RequestsTable = ({ requests, handleApprove, handleDeny, getBadgeVariant, isLoading }: { requests: AccessRequest[], handleApprove: (id: string) => void, handleDeny: (req: AccessRequest) => void, getBadgeVariant: (status: AccessRequest['status']) => string, isLoading: boolean }) => (
     <div className="border rounded-lg">
         <Table>
             <TableHeader>
@@ -260,107 +229,123 @@ const RequestsTable = ({ requests, handleApprove, handleDeny, getBadgeVariant, i
                 <TableHead>User</TableHead>
                 <TableHead>Bucket</TableHead>
                 <TableHead>Reason</TableHead>
-                <TableHead>Expires At</TableHead>
+                <TableHead>Duration</TableHead>
                 <TableHead>Requested</TableHead>
-                <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
             </TableRow>
             </TableHeader>
             <TableBody>
             {isLoading ? (
-              Array.from({ length: 3 }).map((_, i) => (
-                <TableRow key={i}>
-                  <TableCell colSpan={7}><Skeleton className="h-8 w-full" /></TableCell>
-                </TableRow>
-              ))
+              Array.from({ length: 3 }).map((_, i) => (<TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-8 w-full" /></TableCell></TableRow>))
             ) : requests.length === 0 ? (
-                <TableRow>
-                    <TableCell colSpan={7} className="h-24 text-center">No requests found.</TableCell>
-                </TableRow>
-            ) : requests.map((req) => {
-                let requestedAtDate = "Invalid Date";
-                let requestedAtTime = "Invalid Date";
-                try {
-                    if(req.requestedAt) {
-                        const parsedDate = parseISO(req.requestedAt);
-                        requestedAtDate = format(parsedDate, 'PP');
-                        requestedAtTime = format(parsedDate, 'p');
-                    }
-                } catch(e) {
-                    // Keep invalid date strings
-                }
-
-                return (
+                <TableRow><TableCell colSpan={6} className="h-24 text-center">No pending requests.</TableCell></TableRow>
+            ) : requests.map((req) => (
                 <TableRow key={req.id}>
                 <TableCell>
                     <div className="flex items-center gap-3">
-                    <Avatar>
-                        <AvatarImage src={req.userImage || ''} alt={req.userName || ''} />
-                        <AvatarFallback>{req.userName?.charAt(0)}</AvatarFallback>
-                    </Avatar>
-                    <div>
-                        <div className="font-medium">{req.userName}</div>
-                        <div className="text-sm text-muted-foreground">{req.userEmail}</div>
-                    </div>
+                    <Avatar><AvatarImage src={req.userImage || ''} alt={req.userName || ''} /><AvatarFallback>{req.userName?.charAt(0)}</AvatarFallback></Avatar>
+                    <div><div className="font-medium">{req.userName}</div><div className="text-sm text-muted-foreground">{req.userEmail}</div></div>
                     </div>
                 </TableCell>
-                <TableCell>
-                    <div className="font-medium">{req.bucketName}</div>
-                    <div className="text-sm text-muted-foreground">{req.region}</div>
-                </TableCell>
+                <TableCell><div className="font-medium">{req.bucketName}</div><div className="text-sm text-muted-foreground">{req.region}</div></TableCell>
                 <TableCell className="max-w-xs truncate">{req.reason}</TableCell>
+                <TableCell>{req.durationInMinutes} minutes</TableCell>
                 <TableCell>
-                    <div className="font-medium">{formatExpiresAt(req.expiresAt)}</div>
-                </TableCell>
-                <TableCell>
-                    <div className="font-medium">{requestedAtDate}</div>
-                    <div className="text-sm text-muted-foreground">{requestedAtTime}</div>
-                </TableCell>
-                <TableCell>
-                    <Badge className={getBadgeVariant(req.status)}>{req.status}</Badge>
+                    <div className="font-medium">{format(parseISO(req.requestedAt), 'PP')}</div>
+                    <div className="text-sm text-muted-foreground">{format(parseISO(req.requestedAt), 'p')}</div>
                 </TableCell>
                 <TableCell className="text-right">
-                    {req.status === 'pending' ? (
                     <div className="flex gap-2 justify-end">
-                        <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-green-600 hover:text-green-600 hover:bg-green-100 dark:hover:bg-green-900/50"
-                        onClick={() => handleApprove(req.id)}
-                        >
-                        <CheckCircle className="h-5 w-5" />
-                        </Button>
-                        <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-red-600 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/50"
-                        onClick={() => handleDeny(req)}
-                        >
-                        <XCircle className="h-5 w-5" />
-                        </Button>
+                        <Button variant="ghost" size="icon" className="text-green-600 hover:text-green-600 hover:bg-green-100 dark:hover:bg-green-900/50" onClick={() => handleApprove(req.id)}><CheckCircle className="h-5 w-5" /></Button>
+                        <Button variant="ghost" size="icon" className="text-red-600 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/50" onClick={() => handleDeny(req)}><XCircle className="h-5 w-5" /></Button>
                     </div>
-                    ) : (
-                    <div className='flex justify-end'>
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                                <MoreVertical className="h-5 w-5" />
-                            </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent>
-                            <DropdownMenuItem onClick={() => onViewDetails(req)}>View Details</DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    </div>
-                    )}
                 </TableCell>
                 </TableRow>
-            )})}
+            ))}
             </TableBody>
         </Table>
     </div>
 );
 
+const LogsTable = ({ logs, isLoading }: { logs: AuditLog[], isLoading: boolean }) => {
+    const renderEventIcon = (type: AuditLog['eventType']) => {
+        switch (type) {
+            case 'ACCESS_REQUEST_DECISION': return <FileCheck className="h-5 w-5" />;
+            case 'ROLE_CHANGE': return <UserCog className="h-5 w-5 text-blue-500" />;
+            case 'PERMISSIONS_CHANGE': return <KeyRound className="h-5 w-5 text-yellow-500" />;
+            default: return null;
+        }
+    };
+
+    const renderDetails = (log: AuditLog) => {
+        switch (log.eventType) {
+            case 'ACCESS_REQUEST_DECISION':
+                return (
+                    <div>
+                        <span className={`font-semibold ${log.details.status === 'approved' ? 'text-green-600' : 'text-red-600'}`}>{log.details.status?.toUpperCase()}</span>
+                        <span> access for </span>
+                        <span className="font-semibold">{log.target.userName || log.target.userEmail}</span>
+                        <span> to bucket </span>
+                        <span className="font-semibold">{log.target.bucketName}</span>.
+                        {log.details.denialReason && <p className="text-xs text-muted-foreground">Reason: {log.details.denialReason}</p>}
+                    </div>
+                );
+            case 'ROLE_CHANGE':
+                return (
+                    <div>
+                        <span>Changed role of </span>
+                        <span className="font-semibold">{log.target.userName || log.target.userEmail}</span>
+                        <span> from </span>
+                        <Badge variant="secondary">{log.details.fromRole}</Badge>
+                        <span> to </span>
+                        <Badge variant="secondary">{log.details.toRole}</Badge>.
+                    </div>
+                );
+            case 'PERMISSIONS_CHANGE':
+                return (
+                    <div>
+                        <p>Updated permanent permissions for <span className="font-semibold">{log.target.userName || log.target.userEmail}</span>.</p>
+                        {log.details.addedBuckets && log.details.addedBuckets.length > 0 && <p className="text-xs text-green-600">Added: {log.details.addedBuckets.join(', ')}</p>}
+                        {log.details.removedBuckets && log.details.removedBuckets.length > 0 && <p className="text-xs text-red-600">Removed: {log.details.removedBuckets.join(', ')}</p>}
+                    </div>
+                );
+            default:
+                return <pre className="text-xs">{JSON.stringify(log.details, null, 2)}</pre>;
+        }
+    };
+    
+    return (
+        <div className="border rounded-lg">
+            <Table>
+                <TableHeader>
+                <TableRow>
+                    <TableHead className="w-[50px]">Event</TableHead>
+                    <TableHead>Details</TableHead>
+                    <TableHead>Actor</TableHead>
+                    <TableHead>Timestamp</TableHead>
+                </TableRow>
+                </TableHeader>
+                <TableBody>
+                {isLoading ? (
+                    Array.from({ length: 5 }).map((_, i) => (<TableRow key={i}><TableCell colSpan={4}><Skeleton className="h-8 w-full" /></TableCell></TableRow>))
+                ) : logs.length === 0 ? (
+                    <TableRow><TableCell colSpan={4} className="h-24 text-center">No logs found.</TableCell></TableRow>
+                ) : logs.map((log) => (
+                    <TableRow key={log.id}>
+                    <TableCell><div className="flex justify-center">{renderEventIcon(log.eventType)}</div></TableCell>
+                    <TableCell>{renderDetails(log)}</TableCell>
+                    <TableCell>{log.actor.email}</TableCell>
+                    <TableCell>
+                        <div className="font-medium">{format(parseISO(log.timestamp), 'PP')}</div>
+                        <div className="text-sm text-muted-foreground">{format(parseISO(log.timestamp), 'p')}</div>
+                    </TableCell>
+                    </TableRow>
+                ))}
+                </TableBody>
+            </Table>
+        </div>
+    );
+};
 
 const UsersTable = ({ users, onRoleChange, onAssignBuckets, isLoading }: { users: AppUser[], onRoleChange: (userId: string, role: string) => void, onAssignBuckets: (user: AppUser) => void, isLoading: boolean }) => {
     const { data: session } = useSession();
@@ -378,65 +363,39 @@ const UsersTable = ({ users, onRoleChange, onAssignBuckets, isLoading }: { users
                 </TableHeader>
                 <TableBody>
                 {isLoading ? (
-                    Array.from({ length: 3 }).map((_, i) => (
-                        <TableRow key={i}>
-                        <TableCell colSpan={3}><Skeleton className="h-8 w-full" /></TableCell>
-                        </TableRow>
-                    ))
+                    Array.from({ length: 3 }).map((_, i) => ( <TableRow key={i}> <TableCell colSpan={3}><Skeleton className="h-8 w-full" /></TableCell></TableRow>))
                     ) : users.length === 0 ? (
-                        <TableRow>
-                            <TableCell colSpan={3} className="h-24 text-center">No users found.</TableCell>
-                        </TableRow>
+                        <TableRow><TableCell colSpan={3} className="h-24 text-center">No users found.</TableCell></TableRow>
                     ) : users.map((user) => (
                         <TableRow key={user.id}>
                             <TableCell>
                                 <div className="flex items-center gap-3">
-                                <Avatar>
-                                    <AvatarImage src={user.image || ''} alt={user.name || ''} />
-                                    <AvatarFallback>{user.name?.charAt(0)}</AvatarFallback>
-                                </Avatar>
-                                <div>
-                                    <div className="font-medium">{user.name}</div>
-                                    <div className="text-sm text-muted-foreground">{user.email}</div>
-                                </div>
+                                <Avatar><AvatarImage src={user.image || ''} alt={user.name || ''} /><AvatarFallback>{user.name?.charAt(0)}</AvatarFallback></Avatar>
+                                <div><div className="font-medium">{user.name}</div><div className="text-sm text-muted-foreground">{user.email}</div></div>
                                 </div>
                             </TableCell>
                             <TableCell>
                                 <Badge variant={user.role === 'USER' ? 'secondary' : 'default'} className="capitalize">
-                                    {user.role === 'OWNER' ? (
-                                        <Crown className="h-4 w-4 mr-1 text-yellow-500" />
-                                    ) : user.role === 'ADMIN' ? (
-                                        <ShieldCheck className="h-4 w-4 mr-1" />
-                                    ) : (
-                                        <UserIcon className="h-4 w-4 mr-1" />
-                                    )}
+                                    {user.role === 'OWNER' ? <Crown className="h-4 w-4 mr-1 text-yellow-500" /> : user.role === 'ADMIN' ? <ShieldCheck className="h-4 w-4 mr-1" /> : <UserIcon className="h-4 w-4 mr-1" />}
                                     {user.role ? user.role.toLowerCase() : 'N/A'}
                                 </Badge>
                             </TableCell>
                             <TableCell className="text-right">
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
-                                        <Button variant="ghost" size="icon" disabled={user.role === 'OWNER'}>
+                                        <Button variant="ghost" size="icon" disabled={user.role === 'OWNER' || user.id === session?.user?.id}>
                                             <MoreVertical className="h-5 w-5" />
                                         </Button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent>
-                                        <DropdownMenuItem onClick={() => onRoleChange(user.id, 'ADMIN')} disabled={!isOwner || user.id === session?.user?.id || user.role === 'ADMIN'}>
-                                            <ShieldCheck className="mr-2 h-4 w-4" />
-                                            Make Admin
-                                            {user.role === 'ADMIN' && <Check className="ml-auto h-4 w-4" />}
+                                        <DropdownMenuItem onClick={() => onRoleChange(user.id, 'ADMIN')} disabled={!isOwner || user.role === 'ADMIN'}>
+                                            <ShieldCheck className="mr-2 h-4 w-4" /> Make Admin {user.role === 'ADMIN' && <Check className="ml-auto h-4 w-4" />}
                                         </DropdownMenuItem>
-                                        <DropdownMenuItem onClick={() => onRoleChange(user.id, 'USER')} disabled={!isOwner || user.id === session?.user?.id || user.role === 'USER'}>
-                                            <UserIcon className="mr-2 h-4 w-4" />
-                                            Make User
-                                            {user.role === 'USER' && <Check className="ml-auto h-4 w-4" />}
+                                        <DropdownMenuItem onClick={() => onRoleChange(user.id, 'USER')} disabled={!isOwner || user.role === 'USER'}>
+                                            <UserIcon className="mr-2 h-4 w-4" /> Make User {user.role === 'USER' && <Check className="ml-auto h-4 w-4" />}
                                         </DropdownMenuItem>
-                                        <DropdownMenuItem
-                                            onClick={() => onAssignBuckets(user)}
-                                            disabled={user.role === 'ADMIN' || user.role === 'OWNER'}
-                                        >
-                                            <KeyRound className="mr-2 h-4 w-4" />
-                                            Assign Buckets
+                                        <DropdownMenuItem onClick={() => onAssignBuckets(user)} disabled={user.role === 'ADMIN' || user.role === 'OWNER'}>
+                                            <KeyRound className="mr-2 h-4 w-4" /> Assign Buckets
                                         </DropdownMenuItem>
                                     </DropdownMenuContent>
                                 </DropdownMenu>

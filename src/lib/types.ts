@@ -57,3 +57,27 @@ export type AccessRequest = {
   approvedByUserEmail?: string | null;
   approvedAt?: string | null; // ISO string format
 };
+
+export type AuditLog = {
+  id: string;
+  timestamp: string; // ISO string
+  eventType: 'ACCESS_REQUEST_DECISION' | 'ROLE_CHANGE' | 'PERMISSIONS_CHANGE';
+  actor: {
+    userId: string;
+    email: string | null;
+  };
+  target: {
+    userId?: string;
+    userName?: string | null;
+    userEmail?: string | null;
+    bucketName?: string;
+  };
+  details: {
+    status?: 'approved' | 'denied';
+    denialReason?: string | null;
+    fromRole?: 'OWNER' | 'ADMIN' | 'USER';
+    toRole?: 'OWNER' | 'ADMIN' | 'USER';
+    addedBuckets?: string[];
+    removedBuckets?: string[];
+  };
+};

@@ -19,12 +19,15 @@ export async function PATCH(
         return NextResponse.json({ error: 'Invalid user ID format' }, { status: 400 });
     }
 
-    // Use session.user.id which is the UID from Firebase Auth.
-    // Querying users by _id won't work here since we only have UID in session.
-    // We need to fetch the user by their _id, and check if their uid matches the session's uid.
     const { db } = await connectToDatabase();
-    const userToUpdate = await db.collection('users').findOne({ _id: userToUpdateId });
-    
+    const usersCollection = db.collection('users');
+
+    // Fetch user before update to get original role for logging
+    const userToUpdate = await usersCollection.findOne({ _id: userToUpdateId });
+    if (!userToUpdate) {
+        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
     // Admins cannot change their own role
     if (userToUpdate?.uid === session.user.id) {
         return NextResponse.json({ error: 'Admins cannot change their own role.' }, { status: 400 });
@@ -37,16 +40,29 @@ export async function PATCH(
         if (role !== 'ADMIN' && role !== 'USER') {
             return NextResponse.json({ error: 'Invalid role provided.' }, { status: 400 });
         }
+        
+        const originalRole = userToUpdate.role;
 
-        const result = await db.collection('users').findOneAndUpdate(
+        const result = await usersCollection.findOneAndUpdate(
             { _id: userToUpdateId },
             { $set: { role } },
             { returnDocument: 'after' }
         );
 
         if (!result) {
-            return NextResponse.json({ error: 'User not found' }, { status: 404 });
+            // This should not happen if the findOne above succeeded, but as a safeguard.
+            return NextResponse.json({ error: 'User not found during update' }, { status: 404 });
         }
+
+        // Create an audit log entry for the role change
+        const logEntry = {
+            timestamp: new Date(),
+            eventType: 'ROLE_CHANGE',
+            actor: { userId: session.user.id, email: session.user.email },
+            target: { userId: params.id, userEmail: userToUpdate.email, userName: userToUpdate.name },
+            details: { fromRole: originalRole, toRole: role }
+        };
+        await db.collection('auditLogs').insertOne(logEntry);
 
         return NextResponse.json(fromMongo(result));
 

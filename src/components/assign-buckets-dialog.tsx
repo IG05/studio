@@ -21,9 +21,10 @@ import { Label } from './ui/label';
 interface AssignBucketsDialogProps {
   user: AppUser | null;
   onOpenChange: (isOpen: boolean) => void;
+  onPermissionsChanged: () => void;
 }
 
-export function AssignBucketsDialog({ user, onOpenChange }: AssignBucketsDialogProps) {
+export function AssignBucketsDialog({ user, onOpenChange, onPermissionsChanged }: AssignBucketsDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [allBuckets, setAllBuckets] = useState<Bucket[]>([]);
   const [assignedBuckets, setAssignedBuckets] = useState<Set<string>>(new Set());
@@ -70,18 +71,20 @@ export function AssignBucketsDialog({ user, onOpenChange }: AssignBucketsDialogP
         body: JSON.stringify({ buckets: Array.from(assignedBuckets) }),
       });
       if (!response.ok) {
-        throw new Error("Failed to update permissions");
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to update permissions");
       }
       toast({
         title: 'Permissions Updated',
         description: `Bucket permissions for ${user.name} have been updated.`,
       });
+      onPermissionsChanged(); // Notify parent to refresh logs
       onOpenChange(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
       toast({
         title: 'Error',
-        description: 'Could not update permissions. Please try again.',
+        description: error.message || 'Could not update permissions. Please try again.',
         variant: 'destructive',
       });
     } finally {

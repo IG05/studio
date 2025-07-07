@@ -36,8 +36,9 @@ export async function PATCH(
 
     try {
         const { db } = await connectToDatabase();
+        const accessRequestsCollection = db.collection('accessRequests');
         
-        const requestToUpdate = await db.collection('accessRequests').findOne({ _id: objectId });
+        const requestToUpdate = await accessRequestsCollection.findOne({ _id: objectId });
         if (!requestToUpdate) {
             return NextResponse.json({ error: 'Request not found' }, { status: 404 });
         }
@@ -54,14 +55,14 @@ export async function PATCH(
             updatePayload.$set.approvedAt = new Date();
             updatePayload.$set.approvedByUserId = session.user.id;
             updatePayload.$set.approvedByUserEmail = session.user.email;
-            updatePayload.$unset = { denialReason: "", approvedByUserName: "" };
+            updatePayload.$unset = { denialReason: "" };
 
         } else { // status === 'denied'
             updatePayload.$set.denialReason = denialReason;
-            updatePayload.$unset = { approvedAt: "", approvedByUserId: "", approvedByUserName: "", approvedByUserEmail: "", expiresAt: "" };
+            updatePayload.$unset = { approvedAt: "", approvedByUserId: "", approvedByUserEmail: "", expiresAt: "" };
         }
         
-        const result = await db.collection('accessRequests').findOneAndUpdate(
+        const result = await accessRequestsCollection.findOneAndUpdate(
             { _id: objectId },
             updatePayload,
             { returnDocument: 'after' }
@@ -70,6 +71,27 @@ export async function PATCH(
         if (!result) {
             return NextResponse.json({ error: 'Request not found' }, { status: 404 });
         }
+
+        // Create an audit log entry for the decision
+        const logEntry = {
+            timestamp: new Date(),
+            eventType: 'ACCESS_REQUEST_DECISION',
+            actor: {
+              userId: session.user.id,
+              email: session.user.email,
+            },
+            target: {
+              userId: requestToUpdate.userId,
+              userName: requestToUpdate.userName,
+              userEmail: requestToUpdate.userEmail,
+              bucketName: requestToUpdate.bucketName,
+            },
+            details: {
+              status,
+              denialReason: denialReason || null,
+            }
+        };
+        await db.collection('auditLogs').insertOne(logEntry);
         
         return NextResponse.json(fromMongo(result));
 

@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { connectToDatabase } from '@/lib/mongodb';
+import { connectToDatabase, toObjectId } from '@/lib/mongodb';
 
 export async function GET(
     request: NextRequest,
@@ -52,8 +52,19 @@ export async function POST(
 
     try {
         const { db } = await connectToDatabase();
-        
-        await db.collection('permissions').updateOne(
+        const permissionsCollection = db.collection('permissions');
+        const usersCollection = db.collection('users');
+
+        const [targetUser, currentPermissions] = await Promise.all([
+          usersCollection.findOne({ _id: toObjectId(userId) }),
+          permissionsCollection.findOne({ userId })
+        ]);
+
+        if (!targetUser) {
+           return NextResponse.json({ error: 'User not found' }, { status: 404 });
+        }
+
+        await permissionsCollection.updateOne(
             { userId: userId },
             {
                 $set: {
@@ -65,6 +76,22 @@ export async function POST(
             },
             { upsert: true }
         );
+
+        const oldBuckets = new Set(currentPermissions?.buckets || []);
+        const newBuckets = new Set(buckets);
+        const addedBuckets = buckets.filter(b => !oldBuckets.has(b));
+        const removedBuckets = (currentPermissions?.buckets || []).filter(b => !newBuckets.has(b));
+        
+        if (addedBuckets.length > 0 || removedBuckets.length > 0) {
+            const logEntry = {
+                timestamp: new Date(),
+                eventType: 'PERMISSIONS_CHANGE',
+                actor: { userId: session.user.id, email: session.user.email },
+                target: { userId: userId, userEmail: targetUser.email, userName: targetUser.name },
+                details: { addedBuckets, removedBuckets }
+            };
+            await db.collection('auditLogs').insertOne(logEntry);
+        }
 
         return NextResponse.json({ success: true, buckets });
     } catch (error) {
