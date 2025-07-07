@@ -12,24 +12,15 @@ const getOrCreateUser = async (decodedToken: DecodedIdToken) => {
         const { db } = await connectToDatabase();
         const usersCollection = db.collection('users');
         
-        const isOwnerByEmail = email === 'admin@jfl.com';
-
         let userDoc = await usersCollection.findOne({ uid: uid });
 
         if (userDoc) {
-            // If the user is the designated owner but their role is not OWNER, update it.
-            if (isOwnerByEmail && userDoc.role !== 'OWNER') {
-                const result = await usersCollection.findOneAndUpdate(
-                    { uid: uid },
-                    { $set: { role: 'OWNER' } },
-                    { returnDocument: 'after' }
-                );
-                userDoc = result;
-            }
+            // User exists, just return them.
             return fromMongo(userDoc);
         }
         
-        // New user, determine role
+        // New user, determine role and create them.
+        const isOwnerByEmail = email === 'admin@jfl.com';
         const newUser = {
             uid,
             email: email,
