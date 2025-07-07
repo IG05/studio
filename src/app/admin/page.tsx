@@ -293,37 +293,41 @@ const LogsTable = ({ logs, isLoading, onViewDetails }: { logs: AuditLog[], isLoa
     };
 
     const renderDetails = (log: AuditLog) => {
-        const reasonHtml = log.details.reason ? <p className="text-xs text-muted-foreground">Reason: {log.details.reason}</p> : null;
+        const reasonHtml = log.details.reason ? <div className="text-xs text-muted-foreground">Reason: {log.details.reason}</div> : null;
         switch (log.eventType) {
             case 'ACCESS_REQUEST_DECISION':
                 return (
                     <div>
-                        <span className={`font-semibold ${log.details.status === 'approved' ? 'text-green-600' : 'text-red-600'}`}>{log.details.status?.toUpperCase()}</span>
-                        <span> access for </span>
-                        <span className="font-semibold">{log.target.userName || log.target.userEmail}</span>
-                        <span> to bucket </span>
-                        <span className="font-semibold">{log.target.bucketName}</span>.
+                        <div>
+                            <span className={`font-semibold ${log.details.status === 'approved' ? 'text-green-600' : 'text-red-600'}`}>{log.details.status?.toUpperCase()}</span>
+                            <span> access for </span>
+                            <span className="font-semibold">{log.target.userEmail || log.target.userName}</span>
+                            <span> to bucket </span>
+                            <span className="font-semibold">{log.target.bucketName}</span>.
+                        </div>
                         {reasonHtml}
                     </div>
                 );
             case 'ROLE_CHANGE':
                 return (
                     <div>
-                        <span>Changed role of </span>
-                        <span className="font-semibold">{log.target.userName || log.target.userEmail}</span>
-                        <span> from </span>
-                        <Badge variant="secondary">{log.details.fromRole}</Badge>
-                        <span> to </span>
-                        <Badge variant="secondary">{log.details.toRole}</Badge>.
+                        <div>
+                            <span>Changed role of </span>
+                            <span className="font-semibold">{log.target.userEmail || log.target.userName}</span>
+                            <span> from </span>
+                            <Badge variant="secondary">{log.details.fromRole}</Badge>
+                            <span> to </span>
+                            <Badge variant="secondary">{log.details.toRole}</Badge>.
+                        </div>
                         {reasonHtml}
                     </div>
                 );
             case 'PERMISSIONS_CHANGE':
                 return (
                     <div>
-                        <p>Updated permanent permissions for <span className="font-semibold">{log.target.userName || log.target.userEmail}</span>.</p>
-                        {log.details.addedBuckets && log.details.addedBuckets.length > 0 && <p className="text-xs text-green-600">Added: {log.details.addedBuckets.join(', ')}</p>}
-                        {log.details.removedBuckets && log.details.removedBuckets.length > 0 && <p className="text-xs text-red-600">Removed: {log.details.removedBuckets.join(', ')}</p>}
+                        <div>Updated permanent permissions for <span className="font-semibold">{log.target.userEmail || log.target.userName}</span>.</div>
+                        {log.details.addedBuckets && log.details.addedBuckets.length > 0 && <div className="text-xs text-green-600">Added: {log.details.addedBuckets.join(', ')}</div>}
+                        {log.details.removedBuckets && log.details.removedBuckets.length > 0 && <div className="text-xs text-red-600">Removed: {log.details.removedBuckets.join(', ')}</div>}
                         {reasonHtml}
                     </div>
                 );
@@ -440,3 +444,5 @@ const UsersTable = ({ users, onRoleChange, onAssignBuckets, isLoading }: { users
         </div>
     )
 };
+
+    
