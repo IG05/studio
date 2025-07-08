@@ -142,9 +142,9 @@ export function AppSidebar() {
 
       </SidebarContent>
       <SidebarSeparator />
-      <SidebarFooter className="p-4">
-        <div className="flex items-center gap-3">
-          <Avatar className="h-10 w-10">
+      <SidebarFooter className="p-4 group-data-[collapsible=icon]:p-2">
+        <div className="flex items-center gap-3 group-data-[collapsible=icon]:justify-center">
+          <Avatar className="h-10 w-10 group-data-[collapsible=icon]:hidden">
             <AvatarImage src={currentUser.image || ''} alt={currentUser.name || ''} />
             <AvatarFallback>{currentUser.name?.charAt(0)}</AvatarFallback>
           </Avatar>
