@@ -110,17 +110,15 @@ const RequestDetailsContent = ({ request, userRole }: { request: AccessRequest, 
             
             {/* Approval Details: Show if the request was ever approved. */}
             {(request.status === 'approved' || request.status === 'revoked') && request.approvedAt && (
-                <div className="grid gap-2 p-4 border rounded-lg bg-green-50 dark:bg-green-900/20">
-                    {isAdminView && (
-                        <div className="flex items-start gap-4">
-                            <CheckCircle className="h-5 w-5 mt-1 text-green-600 dark:text-green-400" />
-                            <div>
-                                <p className="text-sm text-muted-foreground">Approved By</p>
-                                <p className="font-medium">{request.approvedByUserEmail}</p>
-                                <p className="text-xs text-muted-foreground">{formatDisplayDate(request.approvedAt)}</p>
-                            </div>
+                <div className="grid gap-4 p-4 border rounded-lg bg-green-50 dark:bg-green-900/20">
+                    <div className="flex items-start gap-4">
+                        <CheckCircle className="h-5 w-5 mt-1 text-green-600 dark:text-green-400" />
+                        <div>
+                            <p className="text-sm text-muted-foreground">Approved</p>
+                            <p className="font-medium">{formatDisplayDate(request.approvedAt)}</p>
+                            {isAdminView && <p className="text-xs text-muted-foreground">by {request.approvedByUserEmail}</p>}
                         </div>
-                    )}
+                    </div>
                     {request.approvalReason && (
                         <div className="flex items-start gap-4">
                             <MessageSquareQuote className="h-5 w-5 mt-1 text-green-600 dark:text-green-400" />
@@ -130,55 +128,50 @@ const RequestDetailsContent = ({ request, userRole }: { request: AccessRequest, 
                             </div>
                         </div>
                     )}
-                    {/* Only show expiration date if the access is currently active */}
-                    {request.status === 'approved' && (
-                        <div className="flex items-start gap-4">
-                            <Clock className="h-5 w-5 mt-1 text-green-600 dark:text-green-400" />
-                            <div>
-                                <p className="text-sm text-muted-foreground">Access Expires At</p>
-                                <p className="font-medium">{formatDisplayDate(request.expiresAt)}</p>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {/* Denial Details */}
-            {request.status === 'denied' && (
-                <div className="grid gap-2 p-4 border rounded-lg bg-red-50 dark:bg-red-900/20">
-                    {isAdminView && request.deniedByUserEmail && (
-                         <div className="flex items-start gap-4">
-                            <User className="h-5 w-5 mt-1 text-red-600 dark:text-red-400" />
-                            <div>
-                                <p className="text-sm text-muted-foreground">Denied By</p>
-                                <p className="font-medium">{request.deniedByUserEmail}</p>
-                                <p className="text-xs text-muted-foreground">{formatDisplayDate(request.deniedAt)}</p>
-                            </div>
-                        </div>
-                    )}
                     <div className="flex items-start gap-4">
-                        <Ban className="h-5 w-5 mt-1 text-red-600 dark:text-red-400" />
+                        <Clock className="h-5 w-5 mt-1 text-green-600 dark:text-green-400" />
                         <div>
-                            <p className="text-sm text-muted-foreground">Denial Reason</p>
-                            <p className="font-medium">{request.denialReason || "No reason provided."}</p>
+                            <p className="text-sm text-muted-foreground">Access Originally Valid Until</p>
+                            <p className="font-medium">{formatDisplayDate(request.expiresAt)}</p>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Revocation Details */}
-             {request.status === 'revoked' && (
-                <div className="grid gap-2 p-4 border rounded-lg bg-purple-50 dark:bg-purple-900/20">
-                    {isAdminView && (
+            {/* Denial Details */}
+            {request.status === 'denied' && request.deniedAt && (
+                <div className="grid gap-4 p-4 border rounded-lg bg-red-50 dark:bg-red-900/20">
+                    <div className="flex items-start gap-4">
+                        <Ban className="h-5 w-5 mt-1 text-red-600 dark:text-red-400" />
+                        <div>
+                            <p className="text-sm text-muted-foreground">Denied</p>
+                            <p className="font-medium">{formatDisplayDate(request.deniedAt)}</p>
+                            {isAdminView && <p className="text-xs text-muted-foreground">by {request.deniedByUserEmail}</p>}
+                        </div>
+                    </div>
+                    {request.denialReason && (
                         <div className="flex items-start gap-4">
-                            <ShieldOff className="h-5 w-5 mt-1 text-purple-600 dark:text-purple-400" />
+                            <MessageSquareQuote className="h-5 w-5 mt-1 text-red-600 dark:text-red-400" />
                             <div>
-                                <p className="text-sm text-muted-foreground">Revoked By</p>
-                                <p className="font-medium">{request.revokedByUserEmail}</p>
-                                <p className="text-xs text-muted-foreground">{formatDisplayDate(request.revokedAt)}</p>
+                                <p className="text-sm text-muted-foreground">Denial Reason</p>
+                                <p className="font-medium">{request.denialReason}</p>
                             </div>
                         </div>
                     )}
+                </div>
+            )}
+
+            {/* Revocation Details */}
+             {request.status === 'revoked' && request.revokedAt && (
+                <div className="grid gap-4 p-4 border rounded-lg bg-purple-50 dark:bg-purple-900/20">
+                    <div className="flex items-start gap-4">
+                        <ShieldOff className="h-5 w-5 mt-1 text-purple-600 dark:text-purple-400" />
+                        <div>
+                            <p className="text-sm text-muted-foreground">Revoked</p>
+                            <p className="font-medium">{formatDisplayDate(request.revokedAt)}</p>
+                            {isAdminView && <p className="text-xs text-muted-foreground">by {request.revokedByUserEmail}</p>}
+                        </div>
+                    </div>
                     {request.revocationReason && (
                         <div className="flex items-start gap-4">
                             <MessageSquareQuote className="h-5 w-5 mt-1 text-purple-600 dark:text-purple-400" />
