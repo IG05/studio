@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation';
 import { Toaster } from '@/components/ui/toaster';
 import { AppSidebar } from '@/components/app-sidebar';
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
+import { HelpWidget } from './help-widget';
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -23,6 +24,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <SidebarInset className="overflow-y-auto">{children}</SidebarInset>
           </div>
           <Toaster />
+          <HelpWidget />
         </SidebarProvider>
       )}
     </>
