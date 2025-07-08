@@ -1,5 +1,4 @@
-# Environment variables
-.env*.local
+
 
 # Git
 .git
