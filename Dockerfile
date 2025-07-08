@@ -33,6 +33,8 @@ RUN adduser --system --uid 1001 nextjs
 # This includes only the necessary files for production
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY .env .env
+
 # COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 
 USER nextjs
