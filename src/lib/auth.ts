@@ -58,15 +58,17 @@ export const authOptions: NextAuthOptions = {
         
         const { email, password } = credentials;
 
-        const ldapClient = ldap.createClient({ url: [process.env.LDAP_URL!] });
-        const bind = promisify(ldapClient.bind).bind(ldapClient);
-        const search = promisify(ldapClient.search).bind(ldapClient);
+        const searchClient = ldap.createClient({ url: [process.env.LDAP_URL!] });
+        const searchBind = promisify(searchClient.bind).bind(searchClient);
+        const search = promisify(searchClient.search).bind(searchClient);
+
+        let authClient: ldap.Client | null = null;
 
         try {
             // Step 1: Bind with the service account to find the user's full DN.
             const serviceBindDn = process.env.LDAP_BIND_DN!;
             const serviceBindPassword = process.env.LDAP_BIND_PASSWORD!;
-            await bind(serviceBindDn, serviceBindPassword);
+            await searchBind(serviceBindDn, serviceBindPassword);
             
             const searchFilter = process.env.LDAP_USER_SEARCH_FILTER!.replace('{{username}}', email);
             
@@ -87,7 +89,10 @@ export const authOptions: NextAuthOptions = {
             const userDn = userEntry.dn;
 
             // Step 2: Now, bind as the user with their full DN and provided password to verify them.
-            await bind(userDn, password);
+            // We use a new client for this to avoid issues with an already-bound client.
+            authClient = ldap.createClient({ url: [process.env.LDAP_URL!] });
+            const authBind = promisify(authClient.bind).bind(authClient);
+            await authBind(userDn, password);
 
             // Step 3: If authentication is successful, get/create the user in our local DB.
             const userData = await getOrCreateUser(userEntry);
@@ -109,7 +114,8 @@ export const authOptions: NextAuthOptions = {
             // Provide a generic error message to the user for security.
             throw new Error('Invalid email or password.');
         } finally {
-            ldapClient.unbind();
+            if (searchClient) searchClient.unbind();
+            if (authClient) authClient.unbind();
         }
       }
     })
