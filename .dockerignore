@@ -1,0 +1,17 @@
+# Environment variables
+.env
+.env*.local
+
+# Git
+.git
+.gitignore
+
+# Development artifacts
+node_modules
+.next
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# VSCode
+.vscode
