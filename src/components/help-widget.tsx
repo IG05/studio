@@ -6,7 +6,6 @@ import { useSession } from 'next-auth/react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { HelpCircle, Bot, Unlock, Lock, Timer, RotateCw, User as UserIcon } from 'lucide-react';
-import { Separator } from './ui/separator';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from './ui/scroll-area';
 import { Avatar, AvatarFallback } from './ui/avatar';
@@ -120,8 +119,11 @@ export function HelpWidget() {
 
   const scrollToBottom = () => {
     setTimeout(() => {
-        if(scrollAreaRef.current) {
-            scrollAreaRef.current.scrollTo({ top: scrollAreaRef.current.scrollHeight, behavior: 'smooth' });
+        if (scrollAreaRef.current) {
+            const viewport = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
+            if (viewport) {
+                viewport.scrollTo({ top: viewport.scrollHeight, behavior: 'smooth' });
+            }
         }
     }, 100);
   }

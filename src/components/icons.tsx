@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 export const S3BucketIcon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -11,13 +12,9 @@ export const S3BucketIcon = (props: React.SVGProps<SVGSVGElement>) => (
     strokeLinejoin="round"
     {...props}
   >
-    <path d="M20.89 12.33a3.44 3.44 0 0 0-4.33-4.22" />
-    <path d="M8.44 8.11a3.44 3.44 0 0 0-4.33 4.22" />
-    <path d="M12 2a8.5 8.5 0 0 0-8.28 6.11" />
-    <path d="M12 22a8.5 8.5 0 0 0 8.28-6.11" />
-    <path d="M22 12a8.5 8.5 0 0 0-6.11-8.28" />
-    <path d="M4.11 12.33a8.5 8.5 0 0 0 6.11 8.28" />
-    <path d="m14 12-2 2-2-2" />
-    <path d="M12 14V6" />
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+    <path d="M14.5 9a2.5 2.5 0 1 0-5 0 2.5 2.5 0 0 0 5 0z"></path>
+    <path d="M12 11.5v3"></path>
+    <path d="M10.5 16h3"></path>
   </svg>
 );
