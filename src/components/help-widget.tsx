@@ -5,15 +5,23 @@ import * as React from 'react';
 import { useSession } from 'next-auth/react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
-import { HelpCircle, ArrowLeft, ChevronRight, Unlock, Lock, Timer } from 'lucide-react';
+import { HelpCircle, Bot, Unlock, Lock, Timer, RotateCw, User as UserIcon } from 'lucide-react';
 import { Separator } from './ui/separator';
 import { cn } from '@/lib/utils';
+import { ScrollArea } from './ui/scroll-area';
+import { Avatar, AvatarFallback } from './ui/avatar';
 
 type QnaItem = {
   id: string;
   question: string;
   answer: React.ReactNode;
 };
+
+type ConversationMessage = {
+    id: number;
+    type: 'bot' | 'user' | 'options';
+    content: React.ReactNode;
+}
 
 const baseQuestions: QnaItem[] = [
   {
@@ -27,22 +35,22 @@ const userQuestions: QnaItem[] = [
   ...baseQuestions,
   {
     id: 'how-to-request',
-    question: 'How do I request temporary access to a bucket?',
+    question: 'How do I request temporary access?',
     answer: 'On the main "S3 Buckets Dashboard", find the bucket you need. If you have "No Access", click the "Request Access" button and fill out the form with your reason and the duration you need.',
   },
   {
     id: 'check-status',
-    question: 'How can I check the status of my requests?',
+    question: 'How can I check my request status?',
     answer: 'Click on "My Requests" in the left sidebar menu. This page lists all your pending, approved, and denied requests with their current status.',
   },
   {
     id: 'view-files',
     question: 'How do I view files in a bucket?',
-    answer: 'If your access status for a bucket is "Full Access" or "Temporary Access", you can click the "View" button on the dashboard or click the bucket\'s name in the sidebar to browse its contents.',
+    answer: 'If your access status is "Full Access" or "Temporary Access", you can click the "View" button on the dashboard or click the bucket\'s name in the sidebar to browse its contents.',
   },
   {
     id: 'what-access-means',
-    question: 'What do the different access statuses mean?',
+    question: 'What do the access statuses mean?',
     answer: (
       <ul className="space-y-3">
         <li className="flex items-start gap-3">
@@ -60,61 +68,89 @@ const userQuestions: QnaItem[] = [
       </ul>
     ),
   },
-  {
-    id: 'max-duration',
-    question: 'What is the maximum access duration I can request?',
-    answer: 'You can request access for a duration between 15 minutes and a maximum of 12 hours (720 minutes). An administrator will review and approve the final duration.',
-  },
 ];
 
 const adminQuestions: QnaItem[] = [
     ...baseQuestions,
   {
     id: 'approve-deny',
-    question: 'How do I approve or deny access requests?',
+    question: 'How do I approve or deny requests?',
     answer: 'Navigate to the "Admin Dashboard" via the sidebar. The "Pending Requests" tab lists all active requests. Use the green check (✓) to approve or the red X to deny a request. You must provide a reason for your decision.',
   },
   {
     id: 'grant-permanent',
-    question: 'How do I grant a user permanent bucket access?',
+    question: 'How do I grant permanent access?',
     answer: 'On the "Admin Dashboard", go to the "User Management" tab. Click the action menu (⋮) for the desired user and select "Assign Buckets" to manage their permanent permissions.',
   },
   {
     id: 'view-history',
-    question: 'How can I view a history of all administrative actions?',
+    question: 'How can I view administrative history?',
     answer: 'The "Access Logs" tab on the "Admin Dashboard" provides a complete audit trail of all access decisions, role changes, and permission modifications made by all administrators.',
   },
   {
     id: 'change-role',
     question: 'How do I change a user\'s role?',
-    answer: 'From the "User Management" tab, click the action menu (⋮) for a user to change their role. Please note: Only users with the "OWNER" role have the ability to promote users to Admin or change an existing Admin back to a User.',
-  },
-  {
-    id: 'request-details',
-    question: 'Where can I see the full details of a request?',
-    answer: 'In the "Access Logs" tab, find the relevant \'ACCESS_REQUEST_DECISION\' event. Click the action menu (⋮) and select "View Details" to see a full summary, including the original user\'s justification and the deciding admin\'s reason.',
+    answer: 'From the "User Management" tab, click the action menu (⋮) for a user. Please note: Only users with the "OWNER" role can promote users to Admin or demote an Admin back to a User.',
   },
 ];
 
+const TypingIndicator = () => (
+    <div className="flex items-center space-x-1 p-3">
+      <span className="h-2 w-2 bg-muted-foreground rounded-full animate-pulse [animation-delay:-0.3s]" />
+      <span className="h-2 w-2 bg-muted-foreground rounded-full animate-pulse [animation-delay:-0.15s]" />
+      <span className="h-2 w-2 bg-muted-foreground rounded-full animate-pulse" />
+    </div>
+);
 
 export function HelpWidget() {
   const { data: session } = useSession();
-  const [selectedQuestionId, setSelectedQuestionId] = React.useState<string | null>(null);
   const [isOpen, setIsOpen] = React.useState(false);
+  const scrollAreaRef = React.useRef<HTMLDivElement>(null);
 
-  React.useEffect(() => {
-    if (!isOpen) {
-      // Reset to question list when popover is closed
-      const timer = setTimeout(() => setSelectedQuestionId(null), 150);
-      return () => clearTimeout(timer);
-    }
-  }, [isOpen]);
-
-  if (!session) return null;
-
-  const isAdmin = session.user?.role === 'admin' || session.user?.role === 'owner';
+  const isAdmin = session?.user?.role === 'admin' || session?.user?.role === 'owner';
   const questions = isAdmin ? adminQuestions : userQuestions;
-  const selectedQna = questions.find(q => q.id === selectedQuestionId);
+  
+  const createInitialConversation = (): ConversationMessage[] => [
+    { id: 1, type: 'bot', content: "Hello! I'm the S3 Commander assistant. How can I help you today?" },
+    { id: 2, type: 'options', content: <QuestionOptions onQuestionSelect={handleQuestionSelect} questions={questions} /> },
+  ];
+
+  const [conversation, setConversation] = React.useState<ConversationMessage[]>(createInitialConversation);
+  const [isBotTyping, setIsBotTyping] = React.useState(false);
+
+  const scrollToBottom = () => {
+    setTimeout(() => {
+        if(scrollAreaRef.current) {
+            scrollAreaRef.current.scrollTo({ top: scrollAreaRef.current.scrollHeight, behavior: 'smooth' });
+        }
+    }, 100);
+  }
+
+  React.useEffect(scrollToBottom, [conversation, isBotTyping]);
+  
+  function handleQuestionSelect(question: QnaItem) {
+    // Remove old options
+    setConversation(prev => prev.filter(p => p.type !== 'options'));
+    
+    // Add user question
+    setConversation(prev => [...prev, { id: Date.now(), type: 'user', content: question.question }]);
+    
+    setIsBotTyping(true);
+
+    setTimeout(() => {
+      setIsBotTyping(false);
+      // Add bot answer
+      setConversation(prev => [...prev, { id: Date.now() + 1, type: 'bot', content: question.answer }]);
+      // Add new options
+      setConversation(prev => [...prev, { id: Date.now() + 2, type: 'options', content: <QuestionOptions onQuestionSelect={handleQuestionSelect} questions={questions} /> }]);
+    }, 800);
+  }
+
+  const handleRestart = () => {
+    setConversation(createInitialConversation());
+  };
+  
+  if (!session) return null;
 
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
@@ -129,47 +165,93 @@ export function HelpWidget() {
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-80 sm:w-96 p-0" side="top" align="end">
-        <div className="flex flex-col">
-            <div className="flex items-center p-2">
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    className={cn(
-                        "h-8 w-8",
-                        !selectedQna && "opacity-0 pointer-events-none"
-                    )}
-                    onClick={() => setSelectedQuestionId(null)}
-                >
-                    <ArrowLeft className="h-5 w-5" />
+        <div className="flex flex-col h-[60vh] sm:h-[70vh]">
+            <div className="flex items-center justify-between p-3 border-b">
+                <div className="flex items-center gap-2">
+                    <Avatar className="h-8 w-8 bg-primary/20">
+                        <AvatarFallback><Bot className="h-5 w-5 text-primary" /></AvatarFallback>
+                    </Avatar>
+                    <h4 className="font-semibold">Support Assistant</h4>
+                </div>
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleRestart}>
+                    <RotateCw className="h-4 w-4" />
                 </Button>
-                <h4 className="flex-1 text-center font-semibold pr-8 truncate">
-                    {selectedQna ? selectedQna.question : "Help & Support"}
-                </h4>
             </div>
-            <Separator />
 
-            <div className="p-4">
-                {selectedQna ? (
-                <div className="text-sm text-muted-foreground leading-relaxed">
-                    {selectedQna.answer}
-                </div>
-                ) : (
-                <div className="flex flex-col space-y-2">
-                    {questions.map((qna) => (
-                    <button
-                        key={qna.id}
-                        className="flex items-center justify-between text-left p-3 -m-1 rounded-md hover:bg-accent"
-                        onClick={() => setSelectedQuestionId(qna.id)}
-                    >
-                        <span className="text-sm font-medium">{qna.question}</span>
-                        <ChevronRight className="h-5 w-5 text-muted-foreground" />
-                    </button>
+            <ScrollArea className="flex-1" ref={scrollAreaRef}>
+                <div className="p-4 space-y-4">
+                    {conversation.map(msg => (
+                        <div key={msg.id} className={cn("flex items-start gap-3 w-full", msg.type === 'user' && 'justify-end')}>
+                           {msg.type === 'bot' && (
+                                <Avatar className="h-8 w-8 bg-muted">
+                                    <AvatarFallback><Bot className="h-5 w-5" /></AvatarFallback>
+                                </Avatar>
+                           )}
+                           <div className={cn(
+                               "p-3 rounded-lg max-w-[85%]",
+                               msg.type === 'bot' && 'bg-muted text-muted-foreground',
+                               msg.type === 'user' && 'bg-primary text-primary-foreground',
+                               msg.type === 'options' && 'bg-transparent p-0 w-full'
+                           )}>
+                               <div className="text-sm leading-relaxed prose prose-sm dark:prose-invert max-w-none">
+                                {msg.content}
+                               </div>
+                           </div>
+                           {msg.type === 'user' && (
+                                <Avatar className="h-8 w-8 bg-accent">
+                                    <AvatarFallback><UserIcon className="h-5 w-5" /></AvatarFallback>
+                                </Avatar>
+                           )}
+                        </div>
                     ))}
+                    {isBotTyping && (
+                         <div className="flex items-start gap-3 w-full">
+                            <Avatar className="h-8 w-8 bg-muted">
+                                <AvatarFallback><Bot className="h-5 w-5" /></AvatarFallback>
+                            </Avatar>
+                            <div className="p-3 rounded-lg bg-muted">
+                               <TypingIndicator />
+                            </div>
+                        </div>
+                    )}
                 </div>
-                )}
-            </div>
+            </ScrollArea>
         </div>
       </PopoverContent>
     </Popover>
   );
 }
+
+
+function QuestionOptions({ questions, onQuestionSelect }: { questions: QnaItem[], onQuestionSelect: (q: QnaItem) => void }) {
+    return (
+        <div className="flex flex-col space-y-2 w-full">
+            {questions.map((q) => (
+                <Button
+                    key={q.id}
+                    variant="outline"
+                    className="w-full justify-start h-auto text-left whitespace-normal"
+                    onClick={() => onQuestionSelect(q)}
+                >
+                    {q.question}
+                </Button>
+            ))}
+        </div>
+    );
+}
+
+// Override prose styles for the chat widget
+const proseOverride = `
+.prose :where(ul):not(:where([class~="not-prose"] *)) {
+    margin-top: 0;
+    margin-bottom: 0;
+    padding-left: 1.2rem;
+}
+`;
+(function() {
+    if (typeof document !== 'undefined') {
+        const style = document.createElement('style');
+        style.innerHTML = proseOverride;
+        document.head.appendChild(style);
+    }
+})();
