@@ -38,6 +38,13 @@ import { useSession } from 'next-auth/react';
 import { AssignBucketsDialog } from '@/components/assign-buckets-dialog';
 import { Input } from '@/components/ui/input';
 import { RequestDetailsDialog } from '@/components/request-details-dialog';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+  } from '@/components/ui/select';
 
 export default function AdminPage() {
   const [requests, setRequests] = React.useState<AccessRequest[]>([]);
@@ -50,6 +57,7 @@ export default function AdminPage() {
   const [roleChangeCandidate, setRoleChangeCandidate] = React.useState<{ user: AppUser; role: 'ADMIN' | 'USER' } | null>(null);
   const [permissionUser, setPermissionUser] = React.useState<AppUser | null>(null);
   const [userSearchQuery, setUserSearchQuery] = React.useState('');
+  const [logFilter, setLogFilter] = React.useState('all');
   const [viewingRequest, setViewingRequest] = React.useState<AccessRequest | null>(null);
   const [isDialogLoading, setIsDialogLoading] = React.useState(false);
 
@@ -178,6 +186,12 @@ export default function AdminPage() {
     );
   }, [users, userSearchQuery]);
 
+  const filteredLogs = React.useMemo(() => {
+    if (logFilter === 'all') return logs;
+    return logs.filter(log => log.eventType === logFilter);
+  }, [logs, logFilter]);
+
+
   return (
     <>
       <DenyRequestDialog
@@ -218,7 +232,20 @@ export default function AdminPage() {
                       <RequestsTable requests={filteredRequests} handleApprove={setApprovalCandidate} handleDeny={setDenialCandidate} isLoading={isLoading} />
                   </TabsContent>
                   <TabsContent value="logs">
-                      <LogsTable logs={logs} isLoading={isLoading} onViewDetails={handleViewDetails} />
+                      <div className="flex justify-end mb-4">
+                        <Select value={logFilter} onValueChange={setLogFilter}>
+                          <SelectTrigger className="w-full sm:w-[280px]">
+                            <SelectValue placeholder="Filter by event type..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All Events</SelectItem>
+                            <SelectItem value="ACCESS_REQUEST_DECISION">Access Request Decisions</SelectItem>
+                            <SelectItem value="ROLE_CHANGE">Role Changes</SelectItem>
+                            <SelectItem value="PERMISSIONS_CHANGE">Permissions Changes</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <LogsTable logs={filteredLogs} isLoading={isLoading} onViewDetails={handleViewDetails} />
                   </TabsContent>
                   <TabsContent value="users">
                     <div className="flex justify-end mb-4">
@@ -352,7 +379,7 @@ const LogsTable = ({ logs, isLoading, onViewDetails }: { logs: AuditLog[], isLoa
                 {isLoading ? (
                     Array.from({ length: 5 }).map((_, i) => (<TableRow key={i}><TableCell colSpan={5}><Skeleton className="h-8 w-full" /></TableCell></TableRow>))
                 ) : logs.length === 0 ? (
-                    <TableRow><TableCell colSpan={5} className="h-24 text-center">No logs found.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={5} className="h-24 text-center">No logs found for this filter.</TableCell></TableRow>
                 ) : logs.map((log) => (
                     <TableRow key={log.id}>
                     <TableCell><div className="flex justify-center">{renderEventIcon(log.eventType)}</div></TableCell>
@@ -449,3 +476,5 @@ const UsersTable = ({ users, onRoleChange, onAssignBuckets, isLoading }: { users
         </div>
     )
 };
+
+    
