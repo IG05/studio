@@ -245,19 +245,21 @@ export default function AdminPage() {
         <Header title="Admin Dashboard" />
           <div className="p-4 md:p-6 flex-1 overflow-y-auto">
               <Tabs value={activeTab} onValueChange={setActiveTab} defaultValue="pending">
-                  <TabsList className="mb-4">
-                      <TabsTrigger value="pending">Pending Requests</TabsTrigger>
-                      <TabsTrigger value="active">Active Permissions</TabsTrigger>
-                      <TabsTrigger value="logs">Access Logs</TabsTrigger>
-                      <TabsTrigger value="users">User Management</TabsTrigger>
-                  </TabsList>
-                  <TabsContent value="pending">
+                  <div className="w-full overflow-x-auto">
+                    <TabsList>
+                        <TabsTrigger value="pending">Pending Requests</TabsTrigger>
+                        <TabsTrigger value="active">Active Permissions</TabsTrigger>
+                        <TabsTrigger value="logs">Access Logs</TabsTrigger>
+                        <TabsTrigger value="users">User Management</TabsTrigger>
+                    </TabsList>
+                  </div>
+                  <TabsContent value="pending" className="mt-4">
                       <RequestsTable requests={filteredRequests} handleApprove={setApprovalCandidate} handleDeny={setDenialCandidate} isLoading={isLoading} />
                   </TabsContent>
-                  <TabsContent value="active">
+                  <TabsContent value="active" className="mt-4">
                     <ActivePermissionsTable requests={activeRequests} handleRevoke={setRevocationCandidate} isLoading={isLoading} />
                   </TabsContent>
-                  <TabsContent value="users">
+                  <TabsContent value="users" className="mt-4">
                     <div className="grid gap-4 md:grid-cols-3 mb-6">
                       <Card>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -295,7 +297,7 @@ export default function AdminPage() {
                     </div>
                       <UsersTable users={filteredUsers} onRoleChange={(user, role) => setRoleChangeCandidate({ user, role })} onAssignBuckets={setPermissionUser} isLoading={isLoading} />
                   </TabsContent>
-                  <TabsContent value="logs">
+                  <TabsContent value="logs" className="mt-4">
                       <div className="flex justify-end mb-4">
                         <Select value={logFilter} onValueChange={setLogFilter}>
                           <SelectTrigger className="w-full sm:w-[280px]">
@@ -592,3 +594,5 @@ const UsersTable = ({ users, onRoleChange, onAssignBuckets, isLoading }: { users
         </div>
     )
 };
+
+    
