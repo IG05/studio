@@ -64,6 +64,10 @@ const userQuestions: QnaItem[] = [
             <div className="flex-shrink-0 mt-0.5 h-5 w-5 rounded-full bg-red-500/20 items-center justify-center flex"><div className="h-2 w-2 rounded-full bg-red-500"/></div>
             <div><strong>No Access:</strong> You currently have no permission and must request it to view contents.</div>
         </li>
+        <li className="flex items-start gap-3">
+            <div className="flex-shrink-0 mt-0.5 h-5 w-5 rounded-full bg-purple-500/20 items-center justify-center flex"><div className="h-2 w-2 rounded-full bg-purple-500"/></div>
+            <div><strong>Revoked:</strong> Your approved temporary access was manually ended by an administrator before it expired.</div>
+        </li>
       </ul>
     ),
   },
