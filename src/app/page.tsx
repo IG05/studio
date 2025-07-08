@@ -114,7 +114,9 @@ export default function DashboardPage() {
       <Header title="S3 Buckets Dashboard" />
       <div className="p-4 md:p-6 flex-1 overflow-y-auto">
         <div className="flex items-center justify-between mb-6 gap-4">
-          <h2 className="text-2xl font-bold tracking-tight">Available Buckets</h2>
+          <h2 className="text-2xl font-bold tracking-tight">
+            Available Buckets {!isLoading && `(${filteredBuckets.length})`}
+          </h2>
           <div className="flex items-center gap-4">
             <div className="relative w-64">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -217,3 +219,5 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+    

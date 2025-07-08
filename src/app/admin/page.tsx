@@ -14,10 +14,10 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Header } from '@/components/header';
-import type { AccessRequest, AppUser, AuditLog } from '@/lib/types';
+import type { AccessRequest, AppUser, AuditLog, Bucket } from '@/lib/types';
 import { format, parseISO } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
-import { CheckCircle, XCircle, MoreVertical, ShieldCheck, User as UserIcon, Check, KeyRound, Crown, Search, FileCheck, UserCog, Eye } from 'lucide-react';
+import { CheckCircle, XCircle, MoreVertical, ShieldCheck, User as UserIcon, Check, KeyRound, Crown, Search, FileCheck, UserCog, Eye, HardDrive } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -45,11 +45,13 @@ import {
     SelectTrigger,
     SelectValue,
   } from '@/components/ui/select';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 export default function AdminPage() {
   const [requests, setRequests] = React.useState<AccessRequest[]>([]);
   const [users, setUsers] = React.useState<AppUser[]>([]);
   const [logs, setLogs] = React.useState<AuditLog[]>([]);
+  const [buckets, setBuckets] = React.useState<Bucket[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [activeTab, setActiveTab] = React.useState('pending');
   const [denialCandidate, setDenialCandidate] = React.useState<AccessRequest | null>(null);
@@ -64,29 +66,34 @@ export default function AdminPage() {
   const fetchAllData = React.useCallback(async () => {
     setIsLoading(true);
     try {
-      const [requestsRes, usersRes, logsRes] = await Promise.all([
+      const [requestsRes, usersRes, logsRes, bucketsRes] = await Promise.all([
         fetch('/api/access-requests'),
         fetch('/api/users'),
         fetch('/api/audit-logs'),
+        fetch('/api/buckets'),
       ]);
 
       const requestsData = await requestsRes.json();
       const usersData = await usersRes.json();
       const logsData = await logsRes.json();
+      const bucketsData = await bucketsRes.json();
       
       if (!requestsRes.ok) throw new Error(requestsData.error || 'Failed to fetch access requests.');
       if (!usersRes.ok) throw new Error(usersData.error || 'Failed to fetch users.');
       if (!logsRes.ok) throw new Error(logsData.error || 'Failed to fetch logs.');
+      if (!bucketsRes.ok) throw new Error(bucketsData.error || 'Failed to fetch buckets.');
 
       setRequests(Array.isArray(requestsData) ? requestsData : []);
       setUsers(Array.isArray(usersData) ? usersData : []);
       setLogs(Array.isArray(logsData) ? logsData : []);
+      setBuckets(Array.isArray(bucketsData) ? bucketsData : []);
 
     } catch (err: any) {
       console.error("Failed to fetch admin data", err);
       setRequests([]);
       setUsers([]);
       setLogs([]);
+      setBuckets([]);
       toast({
         title: 'Error',
         description: err.message || 'Could not fetch admin data.',
@@ -191,6 +198,7 @@ export default function AdminPage() {
     return logs.filter(log => log.eventType === logFilter);
   }, [logs, logFilter]);
 
+  const adminCount = React.useMemo(() => users.filter(u => u.role === 'ADMIN' || u.role === 'OWNER').length, [users]);
 
   return (
     <>
@@ -225,11 +233,49 @@ export default function AdminPage() {
               <Tabs value={activeTab} onValueChange={setActiveTab}>
                   <TabsList className="mb-4">
                       <TabsTrigger value="pending">Pending Requests</TabsTrigger>
-                      <TabsTrigger value="logs">Access Logs</TabsTrigger>
                       <TabsTrigger value="users">User Management</TabsTrigger>
+                      <TabsTrigger value="logs">Access Logs</TabsTrigger>
                   </TabsList>
                   <TabsContent value="pending">
                       <RequestsTable requests={filteredRequests} handleApprove={setApprovalCandidate} handleDeny={setDenialCandidate} isLoading={isLoading} />
+                  </TabsContent>
+                  <TabsContent value="users">
+                    <div className="grid gap-4 md:grid-cols-3 mb-6">
+                      <Card>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                          <CardTitle className="text-sm font-medium">Total Users</CardTitle>
+                          <UserIcon className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">{isLoading ? <Skeleton className="h-8 w-1/4" /> : users.length}</div>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                          <CardTitle className="text-sm font-medium">Admins & Owners</CardTitle>
+                          <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">{isLoading ? <Skeleton className="h-8 w-1/4" /> : adminCount}</div>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                          <CardTitle className="text-sm font-medium">Total Buckets</CardTitle>
+                          <HardDrive className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">{isLoading ? <Skeleton className="h-8 w-1/4" /> : buckets.length}</div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                    <div className="flex justify-end mb-4">
+                      <div className="relative w-full max-w-sm">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input placeholder="Search by name or email..." className="pl-9" value={userSearchQuery} onChange={(e) => setUserSearchQuery(e.target.value)} />
+                      </div>
+                    </div>
+                      <UsersTable users={filteredUsers} onRoleChange={(user, role) => setRoleChangeCandidate({ user, role })} onAssignBuckets={setPermissionUser} isLoading={isLoading} />
                   </TabsContent>
                   <TabsContent value="logs">
                       <div className="flex justify-end mb-4">
@@ -246,15 +292,6 @@ export default function AdminPage() {
                         </Select>
                       </div>
                       <LogsTable logs={filteredLogs} isLoading={isLoading} onViewDetails={handleViewDetails} />
-                  </TabsContent>
-                  <TabsContent value="users">
-                    <div className="flex justify-end mb-4">
-                      <div className="relative w-full max-w-sm">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input placeholder="Search by name or email..." className="pl-9" value={userSearchQuery} onChange={(e) => setUserSearchQuery(e.target.value)} />
-                      </div>
-                    </div>
-                      <UsersTable users={filteredUsers} onRoleChange={(user, role) => setRoleChangeCandidate({ user, role })} onAssignBuckets={setPermissionUser} isLoading={isLoading} />
                   </TabsContent>
               </Tabs>
           </div>
