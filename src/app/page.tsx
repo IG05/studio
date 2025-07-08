@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from 'react';
@@ -112,23 +113,23 @@ export default function DashboardPage() {
     <div className="flex flex-col h-full w-full">
       <Header title="S3 Buckets Dashboard" />
       <div className="p-4 md:p-6 flex-1 overflow-y-auto">
-        <div className="flex items-center justify-between mb-6 gap-4">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 gap-4">
           <h2 className="text-2xl font-bold tracking-tight">
             Available Buckets {!isLoading && `(${filteredBuckets.length})`}
           </h2>
-          <div className="flex items-center gap-4">
-            <div className="relative w-64">
+          <div className="flex flex-col sm:flex-row items-center gap-4 w-full md:w-auto">
+            <div className="relative w-full sm:w-64">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search buckets..."
-                className="pl-9"
+                className="pl-9 w-full"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-            <div className="w-72">
+            <div className="w-full sm:w-72">
               <Select onValueChange={setSelectedRegion} defaultValue="all">
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Filter by region" />
                 </SelectTrigger>
                 <SelectContent>
