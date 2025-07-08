@@ -97,7 +97,11 @@ export const authOptions: NextAuthOptions = {
                     }
                     res.on('searchEntry', (entry) => {
                       console.log("LDAP entry found:", entry.dn.toString());
-                        entries.push(entry);
+                      console.log("📄 Full entry:", JSON.stringify((entry as any).object, null, 2));
+                      entries.push(entry);
+                    });
+                    res.on('searchReference', (referral) => {
+                      console.warn("➡️ LDAP referral:", referral.uris.join(', '));
                     });
                     res.on('error', (err) => {
                         reject(err);
