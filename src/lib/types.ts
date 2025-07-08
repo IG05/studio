@@ -42,9 +42,10 @@ export type AccessRequest = {
   reason: string;
   durationInMinutes: number;
   requestedAt: string; // ISO string format
-  status: 'pending' | 'approved' | 'denied';
+  status: 'pending' | 'approved' | 'denied' | 'revoked';
   denialReason?: string | null;
   approvalReason?: string | null;
+  revocationReason?: string | null;
   expiresAt?: string | null; // ISO string format
 
   // Denormalized user data
@@ -62,12 +63,17 @@ export type AccessRequest = {
   deniedByUserId?: string | null;
   deniedByUserEmail?: string | null;
   deniedAt?: string | null; // ISO string format
+
+  // Revocation data
+  revokedByUserId?: string | null;
+  revokedByUserEmail?: string | null;
+  revokedAt?: string | null; // ISO string format
 };
 
 export type AuditLog = {
   id: string;
   timestamp: string; // ISO string
-  eventType: 'ACCESS_REQUEST_DECISION' | 'ROLE_CHANGE' | 'PERMISSIONS_CHANGE';
+  eventType: 'ACCESS_REQUEST_DECISION' | 'ROLE_CHANGE' | 'PERMISSIONS_CHANGE' | 'ACCESS_REVOKED';
   actor: {
     userId: string;
     email: string | null;
@@ -80,7 +86,7 @@ export type AuditLog = {
     requestId?: string;
   };
   details: {
-    status?: 'approved' | 'denied';
+    status?: 'approved' | 'denied' | 'revoked';
     reason?: string;
     fromRole?: 'OWNER' | 'ADMIN' | 'USER';
     toRole?: 'OWNER' | 'ADMIN' | 'USER';

@@ -15,9 +15,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Header } from '@/components/header';
 import type { AccessRequest, AppUser, AuditLog, Bucket } from '@/lib/types';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, formatDistanceToNow } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
-import { CheckCircle, XCircle, MoreVertical, ShieldCheck, User as UserIcon, Check, KeyRound, Crown, Search, FileCheck, UserCog, Eye, HardDrive } from 'lucide-react';
+import { CheckCircle, XCircle, MoreVertical, ShieldCheck, User as UserIcon, Check, KeyRound, Crown, Search, FileCheck, UserCog, Eye, HardDrive, ShieldOff, Slash } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -46,9 +46,11 @@ import {
     SelectValue,
   } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { RevokeAccessDialog } from '@/components/revoke-access-dialog';
 
 export default function AdminPage() {
   const [requests, setRequests] = React.useState<AccessRequest[]>([]);
+  const [activeRequests, setActiveRequests] = React.useState<AccessRequest[]>([]);
   const [users, setUsers] = React.useState<AppUser[]>([]);
   const [logs, setLogs] = React.useState<AuditLog[]>([]);
   const [buckets, setBuckets] = React.useState<Bucket[]>([]);
@@ -56,6 +58,7 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = React.useState('pending');
   const [denialCandidate, setDenialCandidate] = React.useState<AccessRequest | null>(null);
   const [approvalCandidate, setApprovalCandidate] = React.useState<AccessRequest | null>(null);
+  const [revocationCandidate, setRevocationCandidate] = React.useState<AccessRequest | null>(null);
   const [roleChangeCandidate, setRoleChangeCandidate] = React.useState<{ user: AppUser; role: 'ADMIN' | 'USER' } | null>(null);
   const [permissionUser, setPermissionUser] = React.useState<AppUser | null>(null);
   const [userSearchQuery, setUserSearchQuery] = React.useState('');
@@ -66,24 +69,28 @@ export default function AdminPage() {
   const fetchAllData = React.useCallback(async () => {
     setIsLoading(true);
     try {
-      const [requestsRes, usersRes, logsRes, bucketsRes] = await Promise.all([
+      const [requestsRes, usersRes, logsRes, bucketsRes, activeRequestsRes] = await Promise.all([
         fetch('/api/access-requests'),
         fetch('/api/users'),
         fetch('/api/audit-logs'),
         fetch('/api/buckets'),
+        fetch('/api/access-requests/active'),
       ]);
 
       const requestsData = await requestsRes.json();
       const usersData = await usersRes.json();
       const logsData = await logsRes.json();
       const bucketsData = await bucketsRes.json();
+      const activeRequestsData = await activeRequestsRes.json();
       
       if (!requestsRes.ok) throw new Error(requestsData.error || 'Failed to fetch access requests.');
       if (!usersRes.ok) throw new Error(usersData.error || 'Failed to fetch users.');
       if (!logsRes.ok) throw new Error(logsData.error || 'Failed to fetch logs.');
       if (!bucketsRes.ok) throw new Error(bucketsData.error || 'Failed to fetch buckets.');
+      if (!activeRequestsRes.ok) throw new Error(activeRequestsData.error || 'Failed to fetch active requests.');
 
       setRequests(Array.isArray(requestsData) ? requestsData : []);
+      setActiveRequests(Array.isArray(activeRequestsData) ? activeRequestsData : []);
       setUsers(Array.isArray(usersData) ? usersData : []);
       setLogs(Array.isArray(logsData) ? logsData : []);
       setBuckets(Array.isArray(bucketsData) ? bucketsData : []);
@@ -91,6 +98,7 @@ export default function AdminPage() {
     } catch (err: any) {
       console.error("Failed to fetch admin data", err);
       setRequests([]);
+      setActiveRequests([]);
       setUsers([]);
       setLogs([]);
       setBuckets([]);
@@ -108,7 +116,7 @@ export default function AdminPage() {
     fetchAllData();
   }, [fetchAllData]);
 
-  const handleRequest = (requestId: string, status: 'approved' | 'denied', reason: string) => {
+  const handleRequest = (requestId: string, status: 'approved' | 'denied' | 'revoked', reason: string) => {
     fetch(`/api/access-requests/${requestId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -213,6 +221,11 @@ export default function AdminPage() {
         onOpenChange={(isOpen) => !isOpen && setApprovalCandidate(null)}
         onConfirm={(reason) => { if(approvalCandidate) { handleRequest(approvalCandidate.id, 'approved', reason) }}}
       />
+      <RevokeAccessDialog
+        request={revocationCandidate}
+        onOpenChange={(isOpen) => !isOpen && setRevocationCandidate(null)}
+        onConfirm={(reason) => { if(revocationCandidate) { handleRequest(revocationCandidate.id, 'revoked', reason) }}}
+      />
       <ChangeRoleDialog
         candidate={roleChangeCandidate}
         onOpenChange={(isOpen) => !isOpen && setRoleChangeCandidate(null)}
@@ -234,11 +247,15 @@ export default function AdminPage() {
               <Tabs value={activeTab} onValueChange={setActiveTab} defaultValue="pending">
                   <TabsList className="mb-4">
                       <TabsTrigger value="pending">Pending Requests</TabsTrigger>
+                      <TabsTrigger value="active">Active Permissions</TabsTrigger>
                       <TabsTrigger value="logs">Access Logs</TabsTrigger>
                       <TabsTrigger value="users">User Management</TabsTrigger>
                   </TabsList>
                   <TabsContent value="pending">
                       <RequestsTable requests={filteredRequests} handleApprove={setApprovalCandidate} handleDeny={setDenialCandidate} isLoading={isLoading} />
+                  </TabsContent>
+                  <TabsContent value="active">
+                    <ActivePermissionsTable requests={activeRequests} handleRevoke={setRevocationCandidate} isLoading={isLoading} />
                   </TabsContent>
                   <TabsContent value="users">
                     <div className="grid gap-4 md:grid-cols-3 mb-6">
@@ -287,6 +304,7 @@ export default function AdminPage() {
                           <SelectContent>
                             <SelectItem value="all">All Events</SelectItem>
                             <SelectItem value="ACCESS_REQUEST_DECISION">Access Request Decisions</SelectItem>
+                            <SelectItem value="ACCESS_REVOKED">Access Revocations</SelectItem>
                             <SelectItem value="ROLE_CHANGE">Role Changes</SelectItem>
                             <SelectItem value="PERMISSIONS_CHANGE">Permissions Changes</SelectItem>
                           </SelectContent>
@@ -347,10 +365,54 @@ const RequestsTable = ({ requests, handleApprove, handleDeny, isLoading }: { req
     </div>
 );
 
+const ActivePermissionsTable = ({ requests, handleRevoke, isLoading }: { requests: AccessRequest[], handleRevoke: (req: AccessRequest) => void, isLoading: boolean }) => (
+    <div className="border rounded-lg">
+        <Table>
+            <TableHeader>
+            <TableRow>
+                <TableHead>User</TableHead>
+                <TableHead>Bucket</TableHead>
+                <TableHead>Expires</TableHead>
+                <TableHead>Approved By</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+            </TableHeader>
+            <TableBody>
+            {isLoading ? (
+              Array.from({ length: 3 }).map((_, i) => (<TableRow key={i}><TableCell colSpan={5}><Skeleton className="h-8 w-full" /></TableCell></TableRow>))
+            ) : requests.length === 0 ? (
+                <TableRow><TableCell colSpan={5} className="h-24 text-center">No active temporary permissions.</TableCell></TableRow>
+            ) : requests.map((req) => (
+                <TableRow key={req.id}>
+                    <TableCell>
+                        <div className="flex items-center gap-3">
+                        <Avatar><AvatarImage src={req.userImage || ''} alt={req.userName || ''} /><AvatarFallback>{req.userName?.charAt(0)}</AvatarFallback></Avatar>
+                        <div><div className="font-medium">{req.userName}</div><div className="text-sm text-muted-foreground">{req.userEmail}</div></div>
+                        </div>
+                    </TableCell>
+                    <TableCell><div className="font-medium">{req.bucketName}</div><div className="text-sm text-muted-foreground">{req.region}</div></TableCell>
+                    <TableCell>
+                        <div className="font-medium">{format(parseISO(req.expiresAt!), 'PPp')}</div>
+                        <div className="text-sm text-muted-foreground">{formatDistanceToNow(parseISO(req.expiresAt!), { addSuffix: true })}</div>
+                    </TableCell>
+                    <TableCell>{req.approvedByUserEmail}</TableCell>
+                    <TableCell className="text-right">
+                        <Button variant="destructive" size="sm" onClick={() => handleRevoke(req)}>
+                            <ShieldOff className="mr-2 h-4 w-4" /> Revoke
+                        </Button>
+                    </TableCell>
+                </TableRow>
+            ))}
+            </TableBody>
+        </Table>
+    </div>
+);
+
 const LogsTable = ({ logs, isLoading, onViewDetails }: { logs: AuditLog[], isLoading: boolean, onViewDetails: (requestId?: string) => void }) => {
     const renderEventIcon = (type: AuditLog['eventType']) => {
         switch (type) {
             case 'ACCESS_REQUEST_DECISION': return <FileCheck className="h-5 w-5" />;
+            case 'ACCESS_REVOKED': return <ShieldOff className="h-5 w-5 text-purple-500" />;
             case 'ROLE_CHANGE': return <UserCog className="h-5 w-5 text-blue-500" />;
             case 'PERMISSIONS_CHANGE': return <KeyRound className="h-5 w-5 text-yellow-500" />;
             default: return null;
@@ -359,6 +421,9 @@ const LogsTable = ({ logs, isLoading, onViewDetails }: { logs: AuditLog[], isLoa
 
     const renderDetails = (log: AuditLog) => {
         const reasonHtml = log.details.reason ? <div className="text-xs text-muted-foreground">Reason: {log.details.reason}</div> : null;
+        const targetUserHtml = <span className="font-semibold">{log.target.userEmail || log.target.userName}</span>;
+        const targetBucketHtml = <span className="font-semibold">{log.target.bucketName}</span>;
+        
         switch (log.eventType) {
             case 'ACCESS_REQUEST_DECISION':
                 return (
@@ -366,9 +431,22 @@ const LogsTable = ({ logs, isLoading, onViewDetails }: { logs: AuditLog[], isLoa
                         <div>
                             <span className={`font-semibold ${log.details.status === 'approved' ? 'text-green-600' : 'text-red-600'}`}>{log.details.status?.toUpperCase()}</span>
                             <span> access for </span>
-                            <span className="font-semibold">{log.target.userEmail || log.target.userName}</span>
+                            {targetUserHtml}
                             <span> to bucket </span>
-                            <span className="font-semibold">{log.target.bucketName}</span>.
+                            {targetBucketHtml}.
+                        </div>
+                        {reasonHtml}
+                    </div>
+                );
+            case 'ACCESS_REVOKED':
+                 return (
+                    <div>
+                        <div>
+                            <span className="font-semibold text-purple-600">REVOKED</span>
+                            <span> temporary access for </span>
+                            {targetUserHtml}
+                            <span> to bucket </span>
+                            {targetBucketHtml}.
                         </div>
                         {reasonHtml}
                     </div>
@@ -378,7 +456,7 @@ const LogsTable = ({ logs, isLoading, onViewDetails }: { logs: AuditLog[], isLoa
                     <div>
                         <div>
                             <span>Changed role of </span>
-                            <span className="font-semibold">{log.target.userEmail || log.target.userName}</span>
+                            {targetUserHtml}
                             <span> from </span>
                             <Badge variant="secondary">{log.details.fromRole}</Badge>
                             <span> to </span>
@@ -390,7 +468,7 @@ const LogsTable = ({ logs, isLoading, onViewDetails }: { logs: AuditLog[], isLoa
             case 'PERMISSIONS_CHANGE':
                 return (
                     <div>
-                        <div>Updated permanent permissions for <span className="font-semibold">{log.target.userEmail || log.target.userName}</span>.</div>
+                        <div>Updated permanent permissions for {targetUserHtml}.</div>
                         {log.details.addedBuckets && log.details.addedBuckets.length > 0 && <div className="text-xs text-green-600">Added: {log.details.addedBuckets.join(', ')}</div>}
                         {log.details.removedBuckets && log.details.removedBuckets.length > 0 && <div className="text-xs text-red-600">Removed: {log.details.removedBuckets.join(', ')}</div>}
                         {reasonHtml}
@@ -428,7 +506,7 @@ const LogsTable = ({ logs, isLoading, onViewDetails }: { logs: AuditLog[], isLoa
                         <div className="text-sm text-muted-foreground">{format(parseISO(log.timestamp), 'p')}</div>
                     </TableCell>
                     <TableCell className="text-right">
-                        {log.eventType === 'ACCESS_REQUEST_DECISION' && (
+                        {(log.eventType === 'ACCESS_REQUEST_DECISION' || log.eventType === 'ACCESS_REVOKED') && (
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button variant="ghost" size="icon"><MoreVertical className="h-5 w-5" /></Button>
@@ -514,5 +592,3 @@ const UsersTable = ({ users, onRoleChange, onAssignBuckets, isLoading }: { users
         </div>
     )
 };
-
-    

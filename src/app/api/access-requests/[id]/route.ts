@@ -63,7 +63,7 @@ export async function PATCH(
     const body = await request.json();
     const { status, reason } = body;
 
-    if (status !== 'approved' && status !== 'denied') {
+    if (!['approved', 'denied', 'revoked'].includes(status)) {
         return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
     }
     
@@ -81,7 +81,8 @@ export async function PATCH(
         }
 
         const updatePayload: any = { $set: { status } };
-        
+        let logEventType: 'ACCESS_REQUEST_DECISION' | 'ACCESS_REVOKED' = 'ACCESS_REQUEST_DECISION';
+
         if (status === 'approved') {
             const durationInMinutes = requestToUpdate.durationInMinutes;
             if (typeof durationInMinutes !== 'number') {
@@ -95,12 +96,19 @@ export async function PATCH(
             updatePayload.$set.approvalReason = reason;
             updatePayload.$unset = { denialReason: "", deniedAt: "", deniedByUserId: "", deniedByUserEmail: "" };
 
-        } else { // status === 'denied'
+        } else if (status === 'denied') {
             updatePayload.$set.denialReason = reason;
             updatePayload.$set.deniedAt = new Date();
             updatePayload.$set.deniedByUserId = session.user.id;
             updatePayload.$set.deniedByUserEmail = session.user.email;
             updatePayload.$unset = { approvedAt: "", approvedByUserId: "", approvedByUserEmail: "", expiresAt: "", approvalReason: "" };
+        } else if (status === 'revoked') {
+            updatePayload.$set.revocationReason = reason;
+            updatePayload.$set.revokedAt = new Date();
+            updatePayload.$set.revokedByUserId = session.user.id;
+            updatePayload.$set.revokedByUserEmail = session.user.email;
+            updatePayload.$set.expiresAt = new Date(); // Effectively expire the access now
+            logEventType = 'ACCESS_REVOKED';
         }
         
         const result = await accessRequestsCollection.findOneAndUpdate(
@@ -116,7 +124,7 @@ export async function PATCH(
         // Create an audit log entry for the decision
         const logEntry = {
             timestamp: new Date(),
-            eventType: 'ACCESS_REQUEST_DECISION',
+            eventType: logEventType,
             actor: {
               userId: session.user.id,
               email: session.user.email,

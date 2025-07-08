@@ -68,6 +68,8 @@ export default function MyRequestsPage() {
         return 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300';
       case 'denied':
         return 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300';
+      case 'revoked':
+        return 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300';
       case 'pending':
       default:
         return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300';
@@ -76,7 +78,7 @@ export default function MyRequestsPage() {
 
   const filteredRequests = requests.filter(req => {
     if (activeTab === 'pending') return req.status === 'pending';
-    if (activeTab === 'historical') return req.status === 'approved' || req.status === 'denied';
+    if (activeTab === 'historical') return ['approved', 'denied', 'revoked'].includes(req.status);
     return true;
   });
 

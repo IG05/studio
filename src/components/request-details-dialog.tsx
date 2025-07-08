@@ -13,7 +13,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from '@/components/ui/badge';
 import type { AccessRequest } from '@/lib/types';
 import { format, parseISO } from 'date-fns';
-import { User, Calendar, Clock, Lock, Unlock, ShieldQuestion, Ban, CheckCircle, Loader2, MessageSquareQuote } from 'lucide-react';
+import { User, Calendar, Clock, Lock, Unlock, ShieldQuestion, Ban, CheckCircle, Loader2, MessageSquareQuote, ShieldOff } from 'lucide-react';
 
 interface RequestDetailsDialogProps {
   request: AccessRequest | null;
@@ -43,6 +43,12 @@ const getStatusInfo = (req: AccessRequest) => {
                 icon: <Lock className="h-5 w-5 text-red-500" />,
                 text: 'Denied',
                 badge: 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300'
+            };
+        case 'revoked':
+            return {
+                icon: <ShieldOff className="h-5 w-5 text-purple-500" />,
+                text: 'Revoked',
+                badge: 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300'
             };
         case 'pending':
         default:
@@ -151,6 +157,29 @@ const RequestDetailsContent = ({ request, userRole }: { request: AccessRequest, 
                             <p className="font-medium">{request.denialReason || "No reason provided."}</p>
                         </div>
                     </div>
+                </div>
+            )}
+             {request.status === 'revoked' && (
+                <div className="grid gap-2 p-4 border rounded-lg bg-purple-50 dark:bg-purple-900/20">
+                    {isAdminView && (
+                        <div className="flex items-start gap-4">
+                            <ShieldOff className="h-5 w-5 mt-1 text-purple-600 dark:text-purple-400" />
+                            <div>
+                                <p className="text-sm text-muted-foreground">Revoked By</p>
+                                <p className="font-medium">{request.revokedByUserEmail}</p>
+                                <p className="text-xs text-muted-foreground">{formatDisplayDate(request.revokedAt)}</p>
+                            </div>
+                        </div>
+                    )}
+                    {request.revocationReason && (
+                        <div className="flex items-start gap-4">
+                            <MessageSquareQuote className="h-5 w-5 mt-1 text-purple-600 dark:text-purple-400" />
+                            <div>
+                                <p className="text-sm text-muted-foreground">Revocation Reason</p>
+                                <p className="font-medium">{request.revocationReason}</p>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
         </div>
