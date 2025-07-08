@@ -23,25 +23,29 @@ import type { Bucket } from '@/lib/types';
 import { S3BucketIcon } from './icons';
 import { Loader2 } from 'lucide-react';
 
+const ONE_YEAR_IN_MINUTES = 365 * 24 * 60;
+
 const requestAccessSchema = z.object({
   reason: z.string().min(10, 'Please provide a reason of at least 10 characters.'),
-  durationHours: z.coerce.number().int().min(0).max(12),
+  durationDays: z.coerce.number().int().min(0).max(365),
+  durationHours: z.coerce.number().int().min(0).max(23),
   durationMinutes: z.coerce.number().int().min(0).max(59),
 }).refine(
-  (data) => (data.durationHours * 60) + data.durationMinutes >= 15, {
+  (data) => (data.durationDays * 24 * 60) + (data.durationHours * 60) + data.durationMinutes >= 15, {
     message: "Total duration must be at least 15 minutes.",
-    path: ["durationMinutes"],
+    path: ["durationMinutes"], // Point error to the last field
   }
 ).refine(
-  (data) => (data.durationHours * 60) + data.durationMinutes <= 720, {
-    message: "Total duration cannot exceed 12 hours.",
+  (data) => (data.durationDays * 24 * 60) + (data.durationHours * 60) + data.durationMinutes <= ONE_YEAR_IN_MINUTES, {
+    message: "Total duration cannot exceed 1 year.",
+    path: ["durationDays"], // Point error to the first field
+  }
+).refine(
+    (data) => !(data.durationDays === 365 && (data.durationHours > 0 || data.durationMinutes > 0)), {
+    message: "If days is 365, hours and minutes must be 0.",
     path: ["durationHours"],
-  }
-).refine(
-    (data) => data.durationHours !== 12 || data.durationMinutes === 0, {
-    message: "If hours is 12, minutes must be 0.",
-    path: ["durationMinutes"],
 });
+
 
 type RequestAccessFormValues = z.infer<typeof requestAccessSchema>;
 
@@ -58,6 +62,7 @@ export function RequestAccessDialog({ children, bucket }: RequestAccessDialogPro
     resolver: zodResolver(requestAccessSchema),
     defaultValues: {
       reason: '',
+      durationDays: 0,
       durationHours: 0,
       durationMinutes: 15,
     },
@@ -65,7 +70,7 @@ export function RequestAccessDialog({ children, bucket }: RequestAccessDialogPro
 
   const onSubmit = async (values: RequestAccessFormValues) => {
     setIsSubmitting(true);
-    const durationInMinutes = (values.durationHours * 60) + values.durationMinutes;
+    const durationInMinutes = (values.durationDays * 24 * 60) + (values.durationHours * 60) + values.durationMinutes;
 
     try {
       const response = await fetch('/api/access-requests', {
@@ -105,7 +110,7 @@ export function RequestAccessDialog({ children, bucket }: RequestAccessDialogPro
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <S3BucketIcon className="w-5 h-5" /> Request Access
@@ -119,15 +124,28 @@ export function RequestAccessDialog({ children, bucket }: RequestAccessDialogPro
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
             <div className="space-y-2">
                 <FormLabel>Duration</FormLabel>
-                <div className="flex items-start gap-4">
+                <div className="grid grid-cols-3 items-start gap-4">
+                    <FormField
+                    control={form.control}
+                    name="durationDays"
+                    render={({ field }) => (
+                        <FormItem>
+                        <FormLabel>Days</FormLabel>
+                        <FormControl>
+                            <Input type="number" min="0" max="365" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                        </FormItem>
+                    )}
+                    />
                     <FormField
                     control={form.control}
                     name="durationHours"
                     render={({ field }) => (
-                        <FormItem className="flex-1">
+                        <FormItem>
                         <FormLabel>Hours</FormLabel>
                         <FormControl>
-                            <Input type="number" min="0" max="12" {...field} />
+                            <Input type="number" min="0" max="23" {...field} />
                         </FormControl>
                         <FormMessage />
                         </FormItem>
@@ -137,7 +155,7 @@ export function RequestAccessDialog({ children, bucket }: RequestAccessDialogPro
                     control={form.control}
                     name="durationMinutes"
                     render={({ field }) => (
-                        <FormItem className="flex-1">
+                        <FormItem>
                         <FormLabel>Minutes</FormLabel>
                         <FormControl>
                             <Input type="number" min="0" max="59" {...field} />

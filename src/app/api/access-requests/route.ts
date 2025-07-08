@@ -53,8 +53,9 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Missing or invalid required fields' }, { status: 400 });
         }
         
-        if (durationInMinutes < 15 || durationInMinutes > 720) {
-            return NextResponse.json({ error: 'Duration must be between 15 and 720 minutes.' }, { status: 400 });
+        // 1 year = 365 * 24 * 60 = 525600 minutes
+        if (durationInMinutes < 15 || durationInMinutes > 525600) {
+            return NextResponse.json({ error: 'Duration must be between 15 minutes and 1 year.' }, { status: 400 });
         }
 
         const newRequestData = {
