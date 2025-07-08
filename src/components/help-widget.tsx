@@ -109,13 +109,21 @@ export function HelpWidget() {
   const isAdmin = session?.user?.role === 'admin' || session?.user?.role === 'owner';
   const questions = isAdmin ? adminQuestions : userQuestions;
   
-  const createInitialConversation = (): ConversationMessage[] => [
+  const createInitialConversation = React.useCallback((): ConversationMessage[] => [
     { id: 1, type: 'bot', content: "Hello! I'm the S3 Commander assistant. How can I help you today?" },
     { id: 2, type: 'options', content: <QuestionOptions onQuestionSelect={handleQuestionSelect} questions={questions} /> },
-  ];
+  ], [questions]);
 
   const [conversation, setConversation] = React.useState<ConversationMessage[]>(createInitialConversation);
   const [isBotTyping, setIsBotTyping] = React.useState(false);
+
+  // This effect ensures that if the user's role changes (e.g., during a session update),
+  // the conversation is reset with the correct set of questions.
+  React.useEffect(() => {
+    handleRestart();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.user?.role]);
+
 
   const scrollToBottom = () => {
     setTimeout(() => {
@@ -148,9 +156,9 @@ export function HelpWidget() {
     }, 800);
   }
 
-  const handleRestart = () => {
+  const handleRestart = React.useCallback(() => {
     setConversation(createInitialConversation());
-  };
+  }, [createInitialConversation]);
   
   if (!session) return null;
 
