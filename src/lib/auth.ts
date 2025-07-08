@@ -79,13 +79,16 @@ export const authOptions: NextAuthOptions = {
                 const searchOptions = {
                     // FIX: Use a proper filter object to prevent injection and escaping issues.
                     filter: new EqualityFilter({
-                        attribute: 'mail',
+                        attribute: process.env.LDAP_ATTR_EMAIL ?? 'mail',
                         value: credentials.email
                     }),
                     scope: 'sub' as const,
-                    attributes: ['dn', process.env.LDAP_ATTR_EMAIL!, process.env.LDAP_ATTR_NAME!]
+                    attributes: ['dn', process.env.LDAP_ATTR_EMAIL ?? 'mail', process.env.LDAP_ATTR_NAME ?? 'cn']
                 };
 
+                console.log("🔍 ATTR_EMAIL:", process.env.LDAP_ATTR_EMAIL);
+                console.log("🔍 ATTR_NAME:", process.env.LDAP_ATTR_NAME);
+                console.log("📦 Using search attributes:", searchOptions.attributes);
                 console.log("Searching for user:", email);
                 console.log("LDAP base:", process.env.LDAP_SEARCH_BASE);
                 console.log("Using filter: (mail=" + email + ")");
