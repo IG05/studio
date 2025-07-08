@@ -195,7 +195,7 @@ export function RequestDetailsDialog({ request, isLoading, onOpenChange }: Reque
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg flex flex-col max-h-[90vh]">
         <DialogHeader>
           <DialogTitle>{isLoading || !request ? 'Loading Request...' : 'Request Details'}</DialogTitle>
           {!isLoading && request && (
@@ -205,13 +205,15 @@ export function RequestDetailsDialog({ request, isLoading, onOpenChange }: Reque
           )}
         </DialogHeader>
         
-        {isLoading || !request ? (
-            <div className="flex justify-center items-center h-48">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
-        ) : (
-            <RequestDetailsContent request={request} userRole={userRole} />
-        )}
+        <div className="flex-1 overflow-y-auto -mr-6 pr-6">
+            {isLoading || !request ? (
+                <div className="flex justify-center items-center h-48">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+            ) : (
+                <RequestDetailsContent request={request} userRole={userRole} />
+            )}
+        </div>
       </DialogContent>
     </Dialog>
   );
