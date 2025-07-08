@@ -88,10 +88,19 @@ export default {
             height: '0',
           },
         },
+        'button-pulse': {
+          '0%, 100%': {
+            boxShadow: '0 0 0 0 hsl(var(--primary) / 0.7)',
+          },
+          '70%': {
+            boxShadow: '0 0 0 10px hsl(var(--primary) / 0)',
+          },
+        },
       },
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',
         'accordion-up': 'accordion-up 0.2s ease-out',
+        'button-pulse': 'button-pulse 2.5s infinite',
       },
     },
   },

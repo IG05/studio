@@ -5,7 +5,7 @@ import * as React from 'react';
 import { useSession } from 'next-auth/react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
-import { HelpCircle, Bot, Unlock, Lock, Timer, RotateCw, User as UserIcon } from 'lucide-react';
+import { Bot, User as UserIcon, RotateCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from './ui/scroll-area';
 import { Avatar, AvatarFallback } from './ui/avatar';
@@ -49,24 +49,29 @@ const userQuestions: QnaItem[] = [
   },
   {
     id: 'what-access-means',
-    question: 'What do the access statuses mean?',
+    question: 'What do the different access statuses mean?',
     answer: (
       <ul className="space-y-3">
         <li className="flex items-start gap-3">
-            <Unlock className="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
+            <div className="flex-shrink-0 mt-0.5 h-5 w-5 rounded-full bg-green-500/20 items-center justify-center flex"><div className="h-2 w-2 rounded-full bg-green-500"/></div>
             <div><strong>Full Access:</strong> You have permanent permission to this bucket.</div>
         </li>
         <li className="flex items-start gap-3">
-            <Timer className="h-5 w-5 text-orange-500 flex-shrink-0 mt-0.5" />
+            <div className="flex-shrink-0 mt-0.5 h-5 w-5 rounded-full bg-orange-500/20 items-center justify-center flex"><div className="h-2 w-2 rounded-full bg-orange-500"/></div>
             <div><strong>Temporary Access:</strong> You have been granted access for a limited time. The expiration is shown.</div>
         </li>
         <li className="flex items-start gap-3">
-            <Lock className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
+            <div className="flex-shrink-0 mt-0.5 h-5 w-5 rounded-full bg-red-500/20 items-center justify-center flex"><div className="h-2 w-2 rounded-full bg-red-500"/></div>
             <div><strong>No Access:</strong> You currently have no permission and must request it to view contents.</div>
         </li>
       </ul>
     ),
   },
+  {
+    id: 'max-duration',
+    question: 'What is the maximum access duration I can request?',
+    answer: 'You can request access for a duration between 15 minutes and a maximum of 12 hours (720 minutes). An administrator will review and approve the final duration.',
+  }
 ];
 
 const adminQuestions: QnaItem[] = [
@@ -91,6 +96,11 @@ const adminQuestions: QnaItem[] = [
     question: 'How do I change a user\'s role?',
     answer: 'From the "User Management" tab, click the action menu (⋮) for a user. Please note: Only users with the "OWNER" role can promote users to Admin or demote an Admin back to a User.',
   },
+  {
+    id: 'view-request-details',
+    question: 'Where can I see the full details of a request?',
+    answer: 'In the "Access Logs" tab, find the relevant \'ACCESS_REQUEST_DECISION\' event. Click the action menu (⋮) and select "View Details" to see a full summary, including the original user\'s justification and the deciding admin\'s reason.',
+  }
 ];
 
 const TypingIndicator = () => (
@@ -167,10 +177,10 @@ export function HelpWidget() {
       <PopoverTrigger asChild>
         <Button
           variant="default"
-          className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-lg bg-primary hover:bg-primary/90 hover:scale-105 transition-transform"
+          className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-lg bg-primary hover:bg-primary/90 hover:scale-105 transition-transform animate-button-pulse"
           size="icon"
         >
-          <HelpCircle className="h-7 w-7" />
+          <Bot className="h-8 w-8" />
           <span className="sr-only">Help</span>
         </Button>
       </PopoverTrigger>
