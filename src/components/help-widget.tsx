@@ -70,7 +70,7 @@ const userQuestions: QnaItem[] = [
   {
     id: 'max-duration',
     question: 'What is the maximum access duration I can request?',
-    answer: 'You can request access for a duration between 15 minutes and a maximum of 12 hours (720 minutes). An administrator will review and approve the final duration.',
+    answer: 'You can request temporary access for any duration from 15 minutes up to a maximum of one year (365 days). Use the days, hours, and minutes fields in the request form to specify the exact duration you need.',
   }
 ];
 
@@ -80,6 +80,11 @@ const adminQuestions: QnaItem[] = [
     id: 'approve-deny',
     question: 'How do I approve or deny requests?',
     answer: 'Navigate to the "Admin Dashboard" via the sidebar. The "Pending Requests" tab lists all active requests. Use the green check (✓) to approve or the red X to deny a request. You must provide a reason for your decision.',
+  },
+  {
+    id: 'revoke-access',
+    question: 'How do I revoke a user\'s temporary access?',
+    answer: 'Navigate to the "Admin Dashboard" and click on the "Active Permissions" tab. This shows all users with currently active temporary access. Find the user you wish to act on and click the "Revoke" button. You will be required to provide a reason for the revocation for the audit log.',
   },
   {
     id: 'grant-permanent',
