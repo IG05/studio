@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from 'react';
@@ -127,7 +126,7 @@ export default function DashboardPage() {
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-            <div className="w-48">
+            <div className="w-72">
               <Select onValueChange={setSelectedRegion} defaultValue="all">
                 <SelectTrigger>
                   <SelectValue placeholder="Filter by region" />
@@ -136,7 +135,7 @@ export default function DashboardPage() {
                   <SelectItem value="all">All Regions</SelectItem>
                   {regions.map((region) => (
                     <SelectItem key={region.id} value={region.id}>
-                      {region.name}
+                      {region.name} ({region.id})
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -219,5 +218,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
-    
