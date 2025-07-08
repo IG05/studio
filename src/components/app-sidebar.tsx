@@ -86,7 +86,7 @@ export function AppSidebar() {
     <Sidebar className="border-r" collapsible="icon">
       <SidebarHeader className="flex flex-row items-center justify-between p-4">
         <Link href="/" className="flex items-center gap-2">
-          <S3BucketIcon className="w-8 h-8 text-primary" />
+          <S3BucketIcon className="w-7 h-7 text-primary" />
           <h1 className="text-xl font-bold group-data-[collapsible=icon]:hidden">S3 Commander</h1>
         </Link>
       </SidebarHeader>
@@ -101,7 +101,7 @@ export function AppSidebar() {
                 tooltip={{ children: item.label, side: 'right' }}
               >
                 <Link href={item.href}>
-                  <item.icon className="w-5 h-5 mr-3 group-data-[collapsible=icon]:mr-0" />
+                  <item.icon className="group-data-[collapsible=icon]:mr-0" />
                   <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
                 </Link>
               </SidebarMenuButton>
@@ -114,7 +114,7 @@ export function AppSidebar() {
         <Collapsible open={isBucketsOpen} onOpenChange={setIsBucketsOpen} className="px-2">
             <CollapsibleTrigger className={cn("flex items-center justify-between w-full p-2 rounded-md hover:bg-sidebar-accent", state === 'collapsed' && 'justify-center')}>
                 <div className="flex items-center gap-3">
-                    <HardDrive className="w-5 h-5" />
+                    <HardDrive className="w-5 h-5 shrink-0" />
                     <span className="font-semibold group-data-[collapsible=icon]:hidden">Buckets</span>
                 </div>
                 <ChevronRight className="w-4 h-4 transition-transform group-data-[collapsible=icon]:hidden data-[state=open]:rotate-90" />
