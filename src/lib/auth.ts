@@ -2,7 +2,7 @@
 import type { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { connectToDatabase, fromMongo } from './mongodb';
-import ldap, { SearchEntry } from 'ldapjs';
+import ldap, { SearchEntry, EqualityFilter } from 'ldapjs';
 
 // Helper function to create or update user in MongoDB based on LDAP details.
 const getOrCreateUser = async (ldapEntry: SearchEntry) => {
@@ -74,12 +74,14 @@ export const authOptions: NextAuthOptions = {
                 });
             });
             
-            const searchFilter = process.env.LDAP_USER_SEARCH_FILTER!.replace('{{username}}', email);
-            
             const searchResults = await new Promise<SearchEntry[]>((resolve, reject) => {
                 const entries: SearchEntry[] = [];
                 const searchOptions = {
-                    filter: searchFilter,
+                    // FIX: Use a proper filter object to prevent injection and escaping issues.
+                    filter: new EqualityFilter({
+                        attribute: process.env.LDAP_ATTR_EMAIL!,
+                        value: email
+                    }),
                     scope: 'sub' as const,
                     attributes: ['dn', process.env.LDAP_ATTR_EMAIL!, process.env.LDAP_ATTR_NAME!]
                 };
@@ -114,7 +116,7 @@ export const authOptions: NextAuthOptions = {
             const userEntry = searchResults[0];
             const userDn = userEntry.dn;
             
-            searchClient.unbind();
+            searchClient.unbind(); // Unbind the service account connection.
 
             // Step 2: Now, bind as the user with their full DN and provided password to verify them.
             authClient = ldap.createClient({ url: [process.env.LDAP_URL!] });
@@ -135,7 +137,7 @@ export const authOptions: NextAuthOptions = {
 
             return {
               id: userData.id,
-              uid: userData.uid, // This is the LDAP DN
+              uid: userData.uid,
               email: userData.email,
               name: userData.name,
               image: userData.image,
