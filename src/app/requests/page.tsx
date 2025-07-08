@@ -11,7 +11,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Header } from '@/components/header';
+import { Header } from '@/components/ui/header';
 import type { AccessRequest } from '@/lib/types';
 import { format, parseISO } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
@@ -94,7 +94,7 @@ export default function MyRequestsPage() {
             <Tabs value={activeTab} onValueChange={setActiveTab}>
                 <TabsList className="mb-4">
                     <TabsTrigger value="pending">Pending</TabsTrigger>
-                    <TabsTrigger value="historical">Historical</TabsTrigger>
+                    <TabsTrigger value="historical">Request History</TabsTrigger>
                 </TabsList>
                 <TabsContent value="pending">
                     <RequestsTable requests={filteredRequests} getBadgeVariant={getBadgeVariant} isLoading={isLoading} onViewDetails={setViewingRequest} />

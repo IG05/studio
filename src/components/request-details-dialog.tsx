@@ -107,8 +107,9 @@ const RequestDetailsContent = ({ request, userRole }: { request: AccessRequest, 
                     </div>
                 </div>
             </div>
-
-            {request.status === 'approved' && (
+            
+            {/* Approval Details: Show if the request was ever approved. */}
+            {(request.status === 'approved' || request.status === 'revoked') && request.approvedAt && (
                 <div className="grid gap-2 p-4 border rounded-lg bg-green-50 dark:bg-green-900/20">
                     {isAdminView && (
                         <div className="flex items-start gap-4">
@@ -129,15 +130,20 @@ const RequestDetailsContent = ({ request, userRole }: { request: AccessRequest, 
                             </div>
                         </div>
                     )}
-                    <div className="flex items-start gap-4">
-                        <Clock className="h-5 w-5 mt-1 text-green-600 dark:text-green-400" />
-                        <div>
-                            <p className="text-sm text-muted-foreground">Access Expires At</p>
-                            <p className="font-medium">{formatDisplayDate(request.expiresAt)}</p>
+                    {/* Only show expiration date if the access is currently active */}
+                    {request.status === 'approved' && (
+                        <div className="flex items-start gap-4">
+                            <Clock className="h-5 w-5 mt-1 text-green-600 dark:text-green-400" />
+                            <div>
+                                <p className="text-sm text-muted-foreground">Access Expires At</p>
+                                <p className="font-medium">{formatDisplayDate(request.expiresAt)}</p>
+                            </div>
                         </div>
-                    </div>
+                    )}
                 </div>
             )}
+
+            {/* Denial Details */}
             {request.status === 'denied' && (
                 <div className="grid gap-2 p-4 border rounded-lg bg-red-50 dark:bg-red-900/20">
                     {isAdminView && request.deniedByUserEmail && (
@@ -159,6 +165,8 @@ const RequestDetailsContent = ({ request, userRole }: { request: AccessRequest, 
                     </div>
                 </div>
             )}
+
+            {/* Revocation Details */}
              {request.status === 'revoked' && (
                 <div className="grid gap-2 p-4 border rounded-lg bg-purple-50 dark:bg-purple-900/20">
                     {isAdminView && (
