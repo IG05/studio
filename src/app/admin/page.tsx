@@ -245,14 +245,12 @@ export default function AdminPage() {
         <Header title="Admin Dashboard" />
           <div className="p-4 md:p-6 flex-1 overflow-y-auto">
               <Tabs value={activeTab} onValueChange={setActiveTab} defaultValue="pending">
-                  <div className="w-full overflow-x-auto">
-                    <TabsList>
-                        <TabsTrigger value="pending">Pending Requests</TabsTrigger>
-                        <TabsTrigger value="active">Active Permissions</TabsTrigger>
-                        <TabsTrigger value="logs">Access Logs</TabsTrigger>
-                        <TabsTrigger value="users">User Management</TabsTrigger>
-                    </TabsList>
-                  </div>
+                <TabsList className="grid w-full grid-cols-2 h-auto sm:inline-flex sm:w-auto sm:h-10">
+                    <TabsTrigger value="pending">Pending Requests</TabsTrigger>
+                    <TabsTrigger value="active">Active Permissions</TabsTrigger>
+                    <TabsTrigger value="logs">Access Logs</TabsTrigger>
+                    <TabsTrigger value="users">User Management</TabsTrigger>
+                </TabsList>
                   <TabsContent value="pending" className="mt-4">
                       <RequestsTable requests={filteredRequests} handleApprove={setApprovalCandidate} handleDeny={setDenialCandidate} isLoading={isLoading} />
                   </TabsContent>
