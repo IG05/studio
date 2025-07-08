@@ -199,6 +199,7 @@ export default function AdminPage() {
   }, [logs, logFilter]);
 
   const adminCount = React.useMemo(() => users.filter(u => u.role === 'ADMIN' || u.role === 'OWNER').length, [users]);
+  const standardUserCount = React.useMemo(() => users.filter(u => u.role === 'USER').length, [users]);
 
   return (
     <>
@@ -230,11 +231,11 @@ export default function AdminPage() {
       <div className="flex flex-col h-full w-full">
         <Header title="Admin Dashboard" />
           <div className="p-4 md:p-6 flex-1 overflow-y-auto">
-              <Tabs value={activeTab} onValueChange={setActiveTab}>
+              <Tabs value={activeTab} onValueChange={setActiveTab} defaultValue="pending">
                   <TabsList className="mb-4">
                       <TabsTrigger value="pending">Pending Requests</TabsTrigger>
-                      <TabsTrigger value="users">User Management</TabsTrigger>
                       <TabsTrigger value="logs">Access Logs</TabsTrigger>
+                      <TabsTrigger value="users">User Management</TabsTrigger>
                   </TabsList>
                   <TabsContent value="pending">
                       <RequestsTable requests={filteredRequests} handleApprove={setApprovalCandidate} handleDeny={setDenialCandidate} isLoading={isLoading} />
@@ -243,11 +244,11 @@ export default function AdminPage() {
                     <div className="grid gap-4 md:grid-cols-3 mb-6">
                       <Card>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                          <CardTitle className="text-sm font-medium">Total Users</CardTitle>
+                          <CardTitle className="text-sm font-medium">Standard Users</CardTitle>
                           <UserIcon className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
-                          <div className="text-2xl font-bold">{isLoading ? <Skeleton className="h-8 w-1/4" /> : users.length}</div>
+                          <div className="text-2xl font-bold">{isLoading ? <Skeleton className="h-8 w-1/4" /> : standardUserCount}</div>
                         </CardContent>
                       </Card>
                       <Card>
