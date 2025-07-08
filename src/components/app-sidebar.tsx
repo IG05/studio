@@ -67,7 +67,7 @@ export function AppSidebar() {
 
   if (!currentUser) {
     return (
-      <Sidebar className="border-r" collapsible="icon">
+      <Sidebar className="border-r" collapsible="icon" title="Main Navigation">
         <SidebarHeader className="flex flex-row items-center justify-between p-4">
             <Skeleton className="h-8 w-8" />
             <Skeleton className="h-8 w-32 group-data-[collapsible=icon]:hidden" />
@@ -83,12 +83,10 @@ export function AppSidebar() {
   }
 
   return (
-    <Sidebar className="border-r" collapsible="icon">
-      <SidebarHeader className="flex flex-row items-center justify-between p-4">
-        <Link href="/" className="flex items-center gap-2">
-          <S3BucketIcon className="w-7 h-7 text-primary" />
-          <h1 className="text-xl font-bold group-data-[collapsible=icon]:hidden">S3 Commander</h1>
-        </Link>
+    <Sidebar className="border-r" collapsible="icon" title="Main Navigation">
+      <SidebarHeader className="flex items-center gap-2 p-4">
+        <S3BucketIcon className="h-7 w-7 text-primary shrink-0" />
+        <h1 className="text-xl font-bold group-data-[collapsible=icon]:hidden">S3 Commander</h1>
       </SidebarHeader>
       <SidebarContent className="p-2">
         <SidebarMenu>
@@ -97,11 +95,11 @@ export function AppSidebar() {
               <SidebarMenuButton
                 asChild
                 isActive={pathname === item.href}
-                className="w-full justify-start group-data-[collapsible=icon]:justify-center"
+                className="w-full justify-start"
                 tooltip={{ children: item.label, side: 'right' }}
               >
                 <Link href={item.href}>
-                  <item.icon className="group-data-[collapsible=icon]:mr-0" />
+                  <item.icon />
                   <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
                 </Link>
               </SidebarMenuButton>
