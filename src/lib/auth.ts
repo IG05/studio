@@ -1,14 +1,21 @@
 
 import type { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
-import { auth as adminAuth } from './firebase'; // Use our firebase admin instance
-import type { DecodedIdToken } from 'firebase-admin/auth';
 import { connectToDatabase, fromMongo } from './mongodb';
+import ldap, { SearchEntry } from 'ldapjs';
+import { promisify } from 'util';
 
-// Helper function to create or update user in MongoDB.
-// This function will now throw an error if database operations fail.
-const getOrCreateUser = async (decodedToken: DecodedIdToken) => {
-    const { uid, email, name, picture } = decodedToken;
+// Helper function to create or update user in MongoDB based on LDAP details.
+const getOrCreateUser = async (ldapEntry: SearchEntry) => {
+    // The distinguishedName (dn) is a unique identifier for an LDAP entry.
+    const uid = ldapEntry.dn;
+    const email = ldapEntry.attributes.find(a => a.type === process.env.LDAP_ATTR_EMAIL)?.values[0];
+    const name = ldapEntry.attributes.find(a => a.type === process.env.LDAP_ATTR_NAME)?.values[0];
+
+    if (!uid || !email || !name) {
+        throw new Error('LDAP entry is missing required attributes (dn, mail, or cn).');
+    }
+
     const { db } = await connectToDatabase();
     const usersCollection = db.collection('users');
     
@@ -17,14 +24,17 @@ const getOrCreateUser = async (decodedToken: DecodedIdToken) => {
     if (userDoc) {
         return fromMongo(userDoc);
     }
+
+    // Check if this is the first user being created to make them an owner.
+    const userCount = await usersCollection.countDocuments();
+    const isOwner = userCount === 0;
     
-    const isOwnerByEmail = email === 'admin@example.org';
     const newUser = {
-        uid,
+        uid, // Storing the LDAP DN as the unique ID
         email: email,
-        name: name || email?.split('@')[0],
-        role: isOwnerByEmail ? 'OWNER' : 'USER',
-        image: picture || '',
+        name: name,
+        role: isOwner ? 'OWNER' : 'USER',
+        image: '', // LDAP photos can be complex, default to empty
         createdAt: new Date(),
     };
     const result = await usersCollection.insertOne(newUser);
@@ -36,49 +46,70 @@ const getOrCreateUser = async (decodedToken: DecodedIdToken) => {
 export const authOptions: NextAuthOptions = {
   providers: [
     CredentialsProvider({
-      name: 'Firebase',
+      name: 'LDAP',
       credentials: {
-        idToken: { label: "Firebase ID Token", type: "text" },
+        email: { label: "Email", type: "text" },
+        password: { label: "Password", type: "password" }
       },
       async authorize(credentials) {
-        if (!credentials?.idToken) {
-          return null;
+        if (!credentials?.email || !credentials.password) {
+            throw new Error("Email and password are required.");
         }
+        
+        const { email, password } = credentials;
+
+        const ldapClient = ldap.createClient({ url: [process.env.LDAP_URL!] });
+        const bind = promisify(ldapClient.bind).bind(ldapClient);
+        const search = promisify(ldapClient.search).bind(ldapClient);
 
         try {
-          const decodedToken = await adminAuth.verifyIdToken(credentials.idToken);
-          if (!decodedToken || !decodedToken.uid) {
-            return null; // Token is invalid or doesn't have a UID
-          }
+            // Step 1: Bind with the service account to find the user's full DN.
+            const serviceBindDn = process.env.LDAP_BIND_DN!;
+            const serviceBindPassword = process.env.LDAP_BIND_PASSWORD!;
+            await bind(serviceBindDn, serviceBindPassword);
+            
+            const searchFilter = process.env.LDAP_USER_SEARCH_FILTER!.replace('{{username}}', email);
+            
+            const searchResults = await search(process.env.LDAP_SEARCH_BASE!, {
+                filter: searchFilter,
+                scope: 'sub',
+                attributes: ['dn', process.env.LDAP_ATTR_EMAIL!, process.env.LDAP_ATTR_NAME!]
+            }) as SearchEntry[];
 
-          // This block now includes detailed error handling.
-          try {
-            const userData = await getOrCreateUser(decodedToken);
-            if (!userData) {
-                // This case should ideally not be hit if getOrCreateUser throws, but as a safeguard:
+            if (!searchResults || searchResults.length === 0) {
+                throw new Error("User not found in LDAP directory.");
+            }
+            if (searchResults.length > 1) {
+                throw new Error("Multiple users found with the same email address.");
+            }
+
+            const userEntry = searchResults[0];
+            const userDn = userEntry.dn;
+
+            // Step 2: Now, bind as the user with their full DN and provided password to verify them.
+            await bind(userDn, password);
+
+            // Step 3: If authentication is successful, get/create the user in our local DB.
+            const userData = await getOrCreateUser(userEntry);
+             if (!userData) {
                 throw new Error("User data could not be retrieved from the database.");
             }
-            
+
             return {
               id: userData.id,
-              uid: userData.uid,
+              uid: userData.uid, // This is the LDAP DN
               email: userData.email,
               name: userData.name,
               image: userData.image,
               role: userData.role.toLowerCase(),
             };
 
-          } catch (dbError: any) {
-              console.error("Database operation failed during authorization:", dbError);
-              // Re-throw the specific database error so NextAuth can pass it to the client.
-              throw new Error(`Database Error: ${dbError.message}`);
-          }
-
         } catch (error: any) {
-          console.error("Authorization failed:", error);
-          // This will catch the re-thrown DB error or any other error (e.g., Firebase token verification)
-          // The message from this error is what will be displayed on the login page.
-          throw new Error(error.message || 'An unknown authorization error occurred.');
+            console.error("LDAP Authorization Error:", error.message);
+            // Provide a generic error message to the user for security.
+            throw new Error('Invalid email or password.');
+        } finally {
+            ldapClient.unbind();
         }
       }
     })

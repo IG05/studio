@@ -44,9 +44,8 @@
     "date-fns": "^3.6.0",
     "dotenv": "^16.5.0",
     "embla-carousel-react": "^8.6.0",
-    "firebase": "^11.9.1",
-    "firebase-admin": "^12.3.0",
     "genkit": "^1.13.0",
+    "ldapjs": "^3.0.7",
     "lucide-react": "^0.475.0",
     "mongodb": "^6.8.0",
     "mysql2": "^3.10.2",
@@ -64,6 +63,7 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@types/ldapjs": "^3.0.6",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",

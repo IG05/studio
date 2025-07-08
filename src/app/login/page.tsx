@@ -8,14 +8,6 @@ import { signIn } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 
-import { auth } from '@/lib/firebase-client'; // New client-side firebase
-import { 
-    createUserWithEmailAndPassword, 
-    signInWithEmailAndPassword,
-    type AuthError
-} from "firebase/auth";
-
-
 import { Button } from '@/components/ui/button';
 import { S3BucketIcon } from '@/components/icons';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -26,7 +18,7 @@ import { AlertTriangle, Loader2 } from 'lucide-react';
 
 const loginSchema = z.object({
   email: z.string().email('Please enter a valid email address.'),
-  password: z.string().min(6, 'Password must be at least 6 characters.'),
+  password: z.string().min(1, 'Password is required.'),
 });
 
 type LoginFormValues = z.infer<typeof loginSchema>;
@@ -52,35 +44,11 @@ export default function LoginPage() {
     setError(null);
 
     try {
-        let userCredential;
-        try {
-            // First, try to sign in the user
-            userCredential = await signInWithEmailAndPassword(auth, values.email, values.password);
-        } catch (signInError) {
-            const authError = signInError as AuthError;
-            // If sign-in fails because the user doesn't exist, try to create a new account
-            if (authError.code === 'auth/user-not-found') {
-                 try {
-                    userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
-                 } catch (signUpError) {
-                    throw new Error("Could not create account. Please try again.");
-                 }
-            } else if (authError.code === 'auth/wrong-password' || authError.code === 'auth/invalid-credential') {
-                throw new Error("Invalid password. Please try again.");
-            }
-            else {
-                // If sign-in fails for another reason, re-throw the error
-                throw new Error("Authentication failed. Please try again.");
-            }
-        }
-
-      const user = userCredential.user;
-      const idToken = await user.getIdToken();
-
-      // Now, sign in to NextAuth using the Firebase ID token
+      // Sign in to NextAuth using the LDAP credentials provider
       const res = await signIn('credentials', {
         redirect: false,
-        idToken,
+        email: values.email,
+        password: values.password,
         callbackUrl,
       });
 
@@ -89,6 +57,8 @@ export default function LoginPage() {
         setError(res.error);
       } else if (res?.ok) {
         router.push(callbackUrl);
+      } else {
+        setError('An unexpected error occurred. Please try again.');
       }
     } catch (err: any) {
       console.error(err);
@@ -109,8 +79,8 @@ export default function LoginPage() {
 
         <Card className="shadow-2xl shadow-primary/10">
           <CardHeader>
-            <CardTitle>Sign In or Sign Up</CardTitle>
-            <CardDescription>Enter your credentials to continue. An account will be created if you don't have one.</CardDescription>
+            <CardTitle>Sign In</CardTitle>
+            <CardDescription>Enter your corporate credentials to continue.</CardDescription>
           </CardHeader>
           <CardContent>
             <Form {...form}>
@@ -150,7 +120,7 @@ export default function LoginPage() {
                 />
                 <Button type="submit" className="w-full font-semibold" size="lg" disabled={isLoading}>
                   {isLoading && <Loader2 className="mr-2 h-5 w-5 animate-spin" />}
-                  Sign In / Sign Up
+                  Sign In
                 </Button>
               </form>
             </Form>
