@@ -72,6 +72,11 @@ const userQuestions: QnaItem[] = [
     ),
   },
   {
+    id: 'why-revoked',
+    question: 'My approved access was revoked. Why?',
+    answer: 'If your request status is "revoked," it means an administrator manually ended your temporary access before its scheduled expiration time. This is usually done for security or operational reasons, such as when a task is completed early. You can go to the "My Requests" page and view the details of the request to see the specific reason provided by the administrator for the revocation.',
+  },
+  {
     id: 'max-duration',
     question: 'What is the maximum access duration I can request?',
     answer: 'You can request temporary access for any duration from 15 minutes up to a maximum of one year (365 days). Use the days, hours, and minutes fields in the request form to specify the exact duration you need.',
