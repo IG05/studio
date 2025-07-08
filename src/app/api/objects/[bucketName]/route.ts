@@ -45,7 +45,7 @@ async function checkAccess(user: S3CommanderUser, bucketName: string): Promise<b
 
 export async function GET(
     request: NextRequest,
-    context: { params: { bucketName: string } }
+    {params}: { params: { bucketName: string } }
 ) {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id || !session.user.role) {
@@ -58,7 +58,7 @@ export async function GET(
     }
     
     const user = session.user as S3CommanderUser;
-    const bucketName = context.params.bucketName;
+    const bucketName = params.bucketName;
 
     const hasAccess = await checkAccess(user, bucketName);
     if (!hasAccess) {
