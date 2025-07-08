@@ -18,7 +18,7 @@ const getOrCreateUser = async (decodedToken: DecodedIdToken) => {
         return fromMongo(userDoc);
     }
     
-    const isOwnerByEmail = email === 'admin@jfl.com';
+    const isOwnerByEmail = email === 'admin@example.org';
     const newUser = {
         uid,
         email: email,
