@@ -1,10 +1,13 @@
+
 "use client";
 
 import * as React from 'react';
 import { useSession } from 'next-auth/react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
-import { HelpCircle, ArrowLeft } from 'lucide-react';
+import { HelpCircle, ArrowLeft, ChevronRight, Unlock, Lock, Timer } from 'lucide-react';
+import { Separator } from './ui/separator';
+import { cn } from '@/lib/utils';
 
 type QnaItem = {
   id: string;
@@ -41,10 +44,19 @@ const userQuestions: QnaItem[] = [
     id: 'what-access-means',
     question: 'What do the different access statuses mean?',
     answer: (
-      <ul className="list-disc space-y-2 pl-4">
-        <li><strong>Full Access:</strong> You have permanent permission.</li>
-        <li><strong>Temporary Access:</strong> You have been granted access for a limited time. The expiration is shown.</li>
-        <li><strong>No Access:</strong> You currently have no permission and must request it.</li>
+      <ul className="space-y-3">
+        <li className="flex items-start gap-3">
+            <Unlock className="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
+            <div><strong>Full Access:</strong> You have permanent permission to this bucket.</div>
+        </li>
+        <li className="flex items-start gap-3">
+            <Timer className="h-5 w-5 text-orange-500 flex-shrink-0 mt-0.5" />
+            <div><strong>Temporary Access:</strong> You have been granted access for a limited time. The expiration is shown.</div>
+        </li>
+        <li className="flex items-start gap-3">
+            <Lock className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
+            <div><strong>No Access:</strong> You currently have no permission and must request it to view contents.</div>
+        </li>
       </ul>
     ),
   },
@@ -109,46 +121,53 @@ export function HelpWidget() {
       <PopoverTrigger asChild>
         <Button
           variant="default"
-          className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-lg"
+          className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-lg bg-primary hover:bg-primary/90 hover:scale-105 transition-transform"
           size="icon"
         >
           <HelpCircle className="h-7 w-7" />
           <span className="sr-only">Help</span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-80 sm:w-96" side="top" align="end">
-        <div className="space-y-4">
-          <h4 className="font-medium leading-none text-center">
-            {selectedQna ? selectedQna.question : "Help & Support"}
-          </h4>
-          <div className="text-sm text-muted-foreground">
-            {selectedQna ? (
-              <div className="space-y-4">
-                <div>{selectedQna.answer}</div>
+      <PopoverContent className="w-80 sm:w-96 p-0" side="top" align="end">
+        <div className="flex flex-col">
+            <div className="flex items-center p-2">
                 <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSelectedQuestionId(null)}
+                    variant="ghost"
+                    size="icon"
+                    className={cn(
+                        "h-8 w-8",
+                        !selectedQna && "opacity-0 pointer-events-none"
+                    )}
+                    onClick={() => setSelectedQuestionId(null)}
                 >
-                  <ArrowLeft className="mr-2 h-4 w-4" />
-                  Back to questions
+                    <ArrowLeft className="h-5 w-5" />
                 </Button>
-              </div>
-            ) : (
-              <div className="flex flex-col space-y-2">
-                {questions.map((qna) => (
-                  <Button
-                    key={qna.id}
-                    variant="outline"
-                    className="justify-start text-left h-auto py-2"
-                    onClick={() => setSelectedQuestionId(qna.id)}
-                  >
-                    {qna.question}
-                  </Button>
-                ))}
-              </div>
-            )}
-          </div>
+                <h4 className="flex-1 text-center font-semibold pr-8 truncate">
+                    {selectedQna ? selectedQna.question : "Help & Support"}
+                </h4>
+            </div>
+            <Separator />
+
+            <div className="p-4">
+                {selectedQna ? (
+                <div className="text-sm text-muted-foreground leading-relaxed">
+                    {selectedQna.answer}
+                </div>
+                ) : (
+                <div className="flex flex-col space-y-2">
+                    {questions.map((qna) => (
+                    <button
+                        key={qna.id}
+                        className="flex items-center justify-between text-left p-3 -m-1 rounded-md hover:bg-accent"
+                        onClick={() => setSelectedQuestionId(qna.id)}
+                    >
+                        <span className="text-sm font-medium">{qna.question}</span>
+                        <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                    </button>
+                    ))}
+                </div>
+                )}
+            </div>
         </div>
       </PopoverContent>
     </Popover>
