@@ -3,7 +3,6 @@ import type { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { connectToDatabase, fromMongo } from './mongodb';
 import ldap, { SearchEntry } from 'ldapjs';
-import { promisify } from 'util';
 
 // Helper function to create or update user in MongoDB based on LDAP details.
 const getOrCreateUser = async (ldapEntry: SearchEntry) => {
@@ -59,24 +58,51 @@ export const authOptions: NextAuthOptions = {
         const { email, password } = credentials;
 
         const searchClient = ldap.createClient({ url: [process.env.LDAP_URL!] });
-        const searchBind = promisify(searchClient.bind).bind(searchClient);
-        const search = promisify(searchClient.search).bind(searchClient);
-
         let authClient: ldap.Client | null = null;
+        
+        const unbindAll = () => {
+            try { searchClient?.unbind(); } catch (e) { /* ignore */ }
+            try { authClient?.unbind(); } catch (e) { /* ignore */ }
+        };
 
         try {
             // Step 1: Bind with the service account to find the user's full DN.
-            const serviceBindDn = process.env.LDAP_BIND_DN!;
-            const serviceBindPassword = process.env.LDAP_BIND_PASSWORD!;
-            await searchBind(serviceBindDn, serviceBindPassword);
+            await new Promise<void>((resolve, reject) => {
+                searchClient.bind(process.env.LDAP_BIND_DN!, process.env.LDAP_BIND_PASSWORD!, (err) => {
+                    if (err) return reject(err);
+                    resolve();
+                });
+            });
             
             const searchFilter = process.env.LDAP_USER_SEARCH_FILTER!.replace('{{username}}', email);
             
-            const searchResults = await search(process.env.LDAP_SEARCH_BASE!, {
-                filter: searchFilter,
-                scope: 'sub',
-                attributes: ['dn', process.env.LDAP_ATTR_EMAIL!, process.env.LDAP_ATTR_NAME!]
-            }) as SearchEntry[];
+            const searchResults = await new Promise<SearchEntry[]>((resolve, reject) => {
+                const entries: SearchEntry[] = [];
+                const searchOptions = {
+                    filter: searchFilter,
+                    scope: 'sub' as const,
+                    attributes: ['dn', process.env.LDAP_ATTR_EMAIL!, process.env.LDAP_ATTR_NAME!]
+                };
+
+                searchClient.search(process.env.LDAP_SEARCH_BASE!, searchOptions, (err, res) => {
+                    if (err) {
+                        return reject(err);
+                    }
+                    res.on('searchEntry', (entry) => {
+                        entries.push(entry.pojo);
+                    });
+                    res.on('error', (err) => {
+                        reject(err);
+                    });
+                    res.on('end', (result) => {
+                        if (result?.status !== 0) {
+                            return reject(new Error(`LDAP search failed with status ${result?.status}`));
+                        }
+                        resolve(entries);
+                    });
+                });
+            });
+
 
             if (!searchResults || searchResults.length === 0) {
                 throw new Error("User not found in LDAP directory.");
@@ -87,18 +113,25 @@ export const authOptions: NextAuthOptions = {
 
             const userEntry = searchResults[0];
             const userDn = userEntry.dn;
+            
+            searchClient.unbind();
 
             // Step 2: Now, bind as the user with their full DN and provided password to verify them.
-            // We use a new client for this to avoid issues with an already-bound client.
             authClient = ldap.createClient({ url: [process.env.LDAP_URL!] });
-            const authBind = promisify(authClient.bind).bind(authClient);
-            await authBind(userDn, password);
+            await new Promise<void>((resolve, reject) => {
+                authClient!.bind(userDn, password, (err) => {
+                    if (err) return reject(err);
+                    resolve();
+                });
+            });
 
             // Step 3: If authentication is successful, get/create the user in our local DB.
             const userData = await getOrCreateUser(userEntry);
              if (!userData) {
                 throw new Error("User data could not be retrieved from the database.");
             }
+            
+            unbindAll();
 
             return {
               id: userData.id,
@@ -111,11 +144,9 @@ export const authOptions: NextAuthOptions = {
 
         } catch (error: any) {
             console.error("LDAP Authorization Error:", error.message);
+            unbindAll();
             // Provide a generic error message to the user for security.
             throw new Error('Invalid email or password.');
-        } finally {
-            if (searchClient) searchClient.unbind();
-            if (authClient) authClient.unbind();
         }
       }
     })
