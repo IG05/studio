@@ -97,10 +97,10 @@ export default function MyRequestsPage() {
                     <TabsTrigger value="historical">Request History</TabsTrigger>
                 </TabsList>
                 <TabsContent value="pending">
-                    <RequestsTable requests={filteredRequests} getBadgeVariant={getBadgeVariant} isLoading={isLoading} onViewDetails={setViewingRequest} />
+                    <RequestsTable requests={filteredRequests} getBadgeVariant={getBadgeVariant} isLoading={isLoading} onViewDetails={setViewingRequest} activeTab={activeTab} />
                 </TabsContent>
                 <TabsContent value="historical">
-                    <RequestsTable requests={filteredRequests} getBadgeVariant={getBadgeVariant} isLoading={isLoading} onViewDetails={setViewingRequest} />
+                    <RequestsTable requests={filteredRequests} getBadgeVariant={getBadgeVariant} isLoading={isLoading} onViewDetails={setViewingRequest} activeTab={activeTab} />
                 </TabsContent>
             </Tabs>
         </div>
@@ -109,7 +109,7 @@ export default function MyRequestsPage() {
   );
 }
 
-const RequestsTable = ({ requests, getBadgeVariant, isLoading, onViewDetails }: { requests: AccessRequest[], getBadgeVariant: (status: AccessRequest['status']) => string, isLoading: boolean, onViewDetails: (req: AccessRequest) => void }) => (
+const RequestsTable = ({ requests, getBadgeVariant, isLoading, onViewDetails, activeTab }: { requests: AccessRequest[], getBadgeVariant: (status: AccessRequest['status']) => string, isLoading: boolean, onViewDetails: (req: AccessRequest) => void, activeTab: string }) => (
     <div className="border rounded-lg">
         <Table>
             <TableHeader>
@@ -117,6 +117,7 @@ const RequestsTable = ({ requests, getBadgeVariant, isLoading, onViewDetails }: 
                 <TableHead>Bucket</TableHead>
                 <TableHead>Reason</TableHead>
                 <TableHead>Requested</TableHead>
+                {activeTab === 'historical' && <TableHead>Updated</TableHead>}
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
             </TableRow>
@@ -125,43 +126,58 @@ const RequestsTable = ({ requests, getBadgeVariant, isLoading, onViewDetails }: 
             {isLoading ? (
               Array.from({ length: 3 }).map((_, i) => (
                 <TableRow key={i}>
-                  <TableCell colSpan={5}><Skeleton className="h-8 w-full" /></TableCell>
+                  <TableCell colSpan={activeTab === 'historical' ? 6 : 5}><Skeleton className="h-8 w-full" /></TableCell>
                 </TableRow>
               ))
             ) : requests.length === 0 ? (
                 <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center">You have not made any requests in this category.</TableCell>
+                    <TableCell colSpan={activeTab === 'historical' ? 6 : 5} className="h-24 text-center">You have not made any requests in this category.</TableCell>
                 </TableRow>
-            ) : requests.map((req) => (
-                <TableRow key={req.id}>
-                    <TableCell>
-                        <div className="font-medium">{req.bucketName}</div>
-                        <div className="text-sm text-muted-foreground">{req.region}</div>
-                    </TableCell>
-                    <TableCell className="max-w-xs truncate">{req.reason}</TableCell>
-                    <TableCell>
-                        <div className="font-medium">{format(parseISO(req.requestedAt), 'PP')}</div>
-                        <div className="text-sm text-muted-foreground">{format(parseISO(req.requestedAt), 'p')}</div>
-                    </TableCell>
-                    <TableCell>
-                        <Badge className={getBadgeVariant(req.status)}>{req.status}</Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon">
-                                    <MoreVertical className="h-5 w-5" />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent>
-                                <DropdownMenuItem onSelect={() => onViewDetails(req)}>
-                                    <Eye className="mr-2 h-4 w-4" /> View Details
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    </TableCell>
-                </TableRow>
-            ))}
+            ) : requests.map((req) => {
+                const actionDate = req.revokedAt || req.deniedAt || req.approvedAt;
+                return (
+                    <TableRow key={req.id}>
+                        <TableCell>
+                            <div className="font-medium">{req.bucketName}</div>
+                            <div className="text-sm text-muted-foreground">{req.region}</div>
+                        </TableCell>
+                        <TableCell className="max-w-xs truncate">{req.reason}</TableCell>
+                        <TableCell>
+                            <div className="font-medium">{format(parseISO(req.requestedAt), 'PP')}</div>
+                            <div className="text-sm text-muted-foreground">{format(parseISO(req.requestedAt), 'p')}</div>
+                        </TableCell>
+                        {activeTab === 'historical' && (
+                            <TableCell>
+                                {actionDate ? (
+                                    <>
+                                        <div className="font-medium">{format(parseISO(actionDate), 'PP')}</div>
+                                        <div className="text-sm text-muted-foreground">{format(parseISO(actionDate), 'p')}</div>
+                                    </>
+                                ) : (
+                                    '--'
+                                )}
+                            </TableCell>
+                        )}
+                        <TableCell>
+                            <Badge className={getBadgeVariant(req.status)}>{req.status}</Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon">
+                                        <MoreVertical className="h-5 w-5" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent>
+                                    <DropdownMenuItem onSelect={() => onViewDetails(req)}>
+                                        <Eye className="mr-2 h-4 w-4" /> View Details
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        </TableCell>
+                    </TableRow>
+                )
+            })}
             </TableBody>
         </Table>
     </div>
