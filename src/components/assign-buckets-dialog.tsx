@@ -19,8 +19,7 @@ import { toast } from '@/hooks/use-toast';
 import type { AppUser, Bucket, Region } from '@/lib/types';
 import { Loader2, ShieldCheck, Search, HardDrive } from 'lucide-react';
 import { ScrollArea } from './ui/scroll-area';
-import { Label } from './ui/label';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from './ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel } from './ui/form';
 import { Textarea } from './ui/textarea';
 import { Input } from './ui/input';
 import {
@@ -30,6 +29,7 @@ import {
     SelectTrigger,
     SelectValue,
   } from '@/components/ui/select';
+import { Label } from './ui/label';
 
 const permissionsSchema = z.object({
   reason: z.string().min(10, 'Please provide a reason of at least 10 characters.'),
@@ -165,36 +165,51 @@ export function AssignBucketsDialog({ user, onOpenChange, onPermissionsChanged }
 
               <div className="relative">
                 <div className="text-sm text-muted-foreground mb-2">
-                    Selected {assignedBuckets.length} of {filteredAndSortedBuckets.length} buckets shown.
+                    Selected {assignedBuckets.length} of {allBuckets.length} buckets.
                 </div>
-                <ScrollArea className="h-52 border rounded-md p-1">
-                    <div className="p-2 space-y-1">
-                    {filteredAndSortedBuckets.length > 0 ? filteredAndSortedBuckets.map(bucket => (
-                        <div key={bucket.name} className="flex items-center rounded-md p-2 hover:bg-accent has-[[data-state=checked]]:bg-accent">
-                        <Checkbox
-                            id={`bucket-${bucket.name}`}
-                            className="mr-3"
-                            checked={assignedBuckets.includes(bucket.name)}
-                            onCheckedChange={(checked) => {
-                            const currentBuckets = form.getValues('buckets');
-                            if (checked) {
-                                form.setValue('buckets', [...currentBuckets, bucket.name]);
-                            } else {
-                                form.setValue('buckets', currentBuckets.filter(b => b !== bucket.name));
-                            }
-                            }}
-                        />
-                        <Label htmlFor={`bucket-${bucket.name}`} className="text-sm font-medium leading-none flex items-center gap-2 w-full cursor-pointer">
-                            <HardDrive className="h-4 w-4 text-muted-foreground" />
-                            <div className="flex flex-col">
-                               <span>{bucket.name}</span>
-                               <span className="text-xs text-muted-foreground">{bucket.region}</span>
+                <ScrollArea className="h-52 border rounded-md">
+                    <div className="p-2">
+                        {filteredAndSortedBuckets.length > 0 ? (
+                            <FormField
+                                control={form.control}
+                                name="buckets"
+                                render={({ field }) => (
+                                    <div className="space-y-1">
+                                    {filteredAndSortedBuckets.map(bucket => (
+                                        <FormItem key={bucket.name}>
+                                            <Label
+                                                htmlFor={`bucket-${bucket.name}`}
+                                                className="flex cursor-pointer items-center space-x-3 rounded-md p-2 font-normal hover:bg-accent has-[input:checked]:bg-accent"
+                                            >
+                                                <FormControl>
+                                                    <Checkbox
+                                                        id={`bucket-${bucket.name}`}
+                                                        checked={field.value?.includes(bucket.name)}
+                                                        onCheckedChange={(checked) => {
+                                                            return checked
+                                                            ? field.onChange([...field.value, bucket.name])
+                                                            : field.onChange(
+                                                                field.value?.filter((value) => value !== bucket.name)
+                                                            );
+                                                        }}
+                                                    />
+                                                </FormControl>
+                                                <HardDrive className="h-4 w-4 text-muted-foreground" />
+                                                <div className="flex flex-col">
+                                                    <span className="font-medium leading-none">{bucket.name}</span>
+                                                    <span className="text-xs text-muted-foreground">{bucket.region}</span>
+                                                </div>
+                                            </Label>
+                                        </FormItem>
+                                    ))}
+                                    </div>
+                                )}
+                            />
+                        ) : (
+                            <div className="flex h-full items-center justify-center p-8 text-center text-sm text-muted-foreground">
+                                No buckets match your filters.
                             </div>
-                        </Label>
-                        </div>
-                    )) : (
-                        <div className="text-sm text-muted-foreground text-center h-full flex items-center justify-center p-8">No buckets match your filters.</div>
-                    )}
+                        )}
                     </div>
                 </ScrollArea>
               </div>
