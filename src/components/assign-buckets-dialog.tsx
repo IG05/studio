@@ -19,7 +19,7 @@ import { toast } from '@/hooks/use-toast';
 import type { AppUser, Bucket, Region } from '@/lib/types';
 import { Loader2, ShieldCheck, Search, HardDrive } from 'lucide-react';
 import { ScrollArea } from './ui/scroll-area';
-import { Form, FormControl, FormField, FormItem, FormLabel } from './ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from './ui/form';
 import { Textarea } from './ui/textarea';
 import { Input } from './ui/input';
 import {
