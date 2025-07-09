@@ -124,7 +124,7 @@ export function AssignBucketsDialog({ user, onOpenChange, onPermissionsChanged }
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg flex flex-col max-h-[90vh]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><ShieldCheck /> Assign Buckets</DialogTitle>
           {user && (
@@ -133,109 +133,115 @@ export function AssignBucketsDialog({ user, onOpenChange, onPermissionsChanged }
             </DialogDescription>
           )}
         </DialogHeader>
-        {isLoading ? (
-          <div className="flex justify-center items-center h-48">
-            <Loader2 className="h-8 w-8 animate-spin" />
-          </div>
-        ) : (
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <div className="flex flex-col sm:flex-row gap-2">
-                <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                        placeholder="Search buckets..."
-                        className="pl-9"
-                        value={searchQuery}
-                        onChange={e => setSearchQuery(e.target.value)}
-                    />
-                </div>
-                <Select value={selectedRegion} onValueChange={setSelectedRegion}>
-                  <SelectTrigger className="w-full sm:w-[200px]">
-                    <SelectValue placeholder="Filter by region" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Regions</SelectItem>
-                    {regions.map(region => (
-                      <SelectItem key={region.id} value={region.id}>{region.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
 
-              <div className="relative">
-                <div className="text-sm text-muted-foreground mb-2">
-                    Selected {assignedBuckets.length} of {allBuckets.length} buckets.
-                </div>
-                <ScrollArea className="h-52 border rounded-md">
-                    <div className="p-2">
-                        {filteredAndSortedBuckets.length > 0 ? (
-                            <FormField
-                                control={form.control}
-                                name="buckets"
-                                render={({ field }) => (
-                                    <div className="space-y-1">
-                                    {filteredAndSortedBuckets.map(bucket => (
-                                        <FormItem key={bucket.name}>
-                                            <Label
-                                                htmlFor={`bucket-${bucket.name}`}
-                                                className="flex cursor-pointer items-center space-x-3 rounded-md p-2 font-normal hover:bg-accent has-[input:checked]:bg-accent"
-                                            >
-                                                <FormControl>
-                                                    <Checkbox
-                                                        id={`bucket-${bucket.name}`}
-                                                        checked={field.value?.includes(bucket.name)}
-                                                        onCheckedChange={(checked) => {
-                                                            return checked
-                                                            ? field.onChange([...field.value, bucket.name])
-                                                            : field.onChange(
-                                                                field.value?.filter((value) => value !== bucket.name)
-                                                            );
-                                                        }}
-                                                    />
-                                                </FormControl>
-                                                <HardDrive className="h-4 w-4 text-muted-foreground" />
-                                                <div className="flex flex-col">
-                                                    <span className="font-medium leading-none">{bucket.name}</span>
-                                                    <span className="text-xs text-muted-foreground">{bucket.region}</span>
-                                                </div>
-                                            </Label>
-                                        </FormItem>
-                                    ))}
-                                    </div>
-                                )}
-                            />
-                        ) : (
-                            <div className="flex h-full items-center justify-center p-8 text-center text-sm text-muted-foreground">
-                                No buckets match your filters.
-                            </div>
-                        )}
+        <div className="flex-1 overflow-y-auto -mr-6 pr-6">
+            {isLoading ? (
+            <div className="flex justify-center items-center h-full px-6">
+                <Loader2 className="h-8 w-8 animate-spin" />
+            </div>
+            ) : (
+            <Form {...form}>
+                <form id="assign-buckets-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 px-6">
+                <div className="flex flex-col sm:flex-row gap-2">
+                    <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            placeholder="Search buckets..."
+                            className="pl-9"
+                            value={searchQuery}
+                            onChange={e => setSearchQuery(e.target.value)}
+                        />
                     </div>
-                </ScrollArea>
-              </div>
+                    <Select value={selectedRegion} onValueChange={setSelectedRegion}>
+                    <SelectTrigger className="w-full sm:w-[200px]">
+                        <SelectValue placeholder="Filter by region" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All Regions</SelectItem>
+                        {regions.map(region => (
+                        <SelectItem key={region.id} value={region.id}>{region.name}</SelectItem>
+                        ))}
+                    </SelectContent>
+                    </Select>
+                </div>
 
-              <FormField
-                control={form.control}
-                name="reason"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Reason for Change</FormLabel>
-                    <FormControl>
-                      <Textarea placeholder="e.g., Granting access for new project responsibilities." {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <DialogFooter>
+                <div className="relative">
+                    <div className="text-sm text-muted-foreground mb-2">
+                        Selected {assignedBuckets.length} of {allBuckets.length} buckets.
+                    </div>
+                    <ScrollArea className="h-64 border rounded-md">
+                        <div className="p-2">
+                            {filteredAndSortedBuckets.length > 0 ? (
+                                <FormField
+                                    control={form.control}
+                                    name="buckets"
+                                    render={({ field }) => (
+                                        <div className="space-y-1">
+                                        {filteredAndSortedBuckets.map(bucket => (
+                                            <FormItem key={bucket.name}>
+                                                <Label
+                                                    htmlFor={`bucket-${bucket.name}`}
+                                                    className="flex cursor-pointer items-center space-x-3 rounded-md p-2 font-normal hover:bg-accent has-[input:checked]:bg-accent"
+                                                >
+                                                    <FormControl>
+                                                        <Checkbox
+                                                            id={`bucket-${bucket.name}`}
+                                                            checked={field.value?.includes(bucket.name)}
+                                                            onCheckedChange={(checked) => {
+                                                                return checked
+                                                                ? field.onChange([...field.value, bucket.name])
+                                                                : field.onChange(
+                                                                    field.value?.filter((value) => value !== bucket.name)
+                                                                );
+                                                            }}
+                                                        />
+                                                    </FormControl>
+                                                    <HardDrive className="h-4 w-4 text-muted-foreground" />
+                                                    <div className="flex flex-col">
+                                                        <span className="font-medium leading-none">{bucket.name}</span>
+                                                        <span className="text-xs text-muted-foreground">{bucket.region}</span>
+                                                    </div>
+                                                </Label>
+                                            </FormItem>
+                                        ))}
+                                        </div>
+                                    )}
+                                />
+                            ) : (
+                                <div className="flex h-full items-center justify-center p-8 text-center text-sm text-muted-foreground">
+                                    No buckets match your filters.
+                                </div>
+                            )}
+                        </div>
+                    </ScrollArea>
+                </div>
+
+                <FormField
+                    control={form.control}
+                    name="reason"
+                    render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Reason for Change</FormLabel>
+                        <FormControl>
+                        <Textarea placeholder="e.g., Granting access for new project responsibilities." {...field} />
+                        </FormControl>
+                        <FormMessage />
+                    </FormItem>
+                    )}
+                />
+                </form>
+            </Form>
+            )}
+        </div>
+
+        {!isLoading && (
+            <DialogFooter className="pt-4 border-t">
                 <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-                <Button type="submit" disabled={isLoading || form.formState.isSubmitting}>
-                  {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Save Permissions
+                <Button type="submit" form="assign-buckets-form" disabled={form.formState.isSubmitting}>
+                {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Save Permissions
                 </Button>
-              </DialogFooter>
-            </form>
-          </Form>
+            </DialogFooter>
         )}
       </DialogContent>
     </Dialog>
