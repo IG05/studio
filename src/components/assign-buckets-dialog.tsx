@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -16,12 +16,20 @@ import {
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from '@/hooks/use-toast';
-import type { AppUser, Bucket } from '@/lib/types';
-import { Loader2, ShieldCheck } from 'lucide-react';
+import type { AppUser, Bucket, Region } from '@/lib/types';
+import { Loader2, ShieldCheck, Search, HardDrive } from 'lucide-react';
 import { ScrollArea } from './ui/scroll-area';
 import { Label } from './ui/label';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from './ui/form';
 import { Textarea } from './ui/textarea';
+import { Input } from './ui/input';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+  } from '@/components/ui/select';
 
 const permissionsSchema = z.object({
   reason: z.string().min(10, 'Please provide a reason of at least 10 characters.'),
@@ -38,7 +46,10 @@ interface AssignBucketsDialogProps {
 
 export function AssignBucketsDialog({ user, onOpenChange, onPermissionsChanged }: AssignBucketsDialogProps) {
   const [allBuckets, setAllBuckets] = useState<Bucket[]>([]);
+  const [regions, setRegions] = useState<Region[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedRegion, setSelectedRegion] = useState('all');
   const isOpen = !!user;
 
   const form = useForm<PermissionsFormValues>({
@@ -53,11 +64,15 @@ export function AssignBucketsDialog({ user, onOpenChange, onPermissionsChanged }
     if (isOpen && user) {
       setIsLoading(true);
       form.reset();
+      setSearchQuery('');
+      setSelectedRegion('all');
       Promise.all([
         fetch('/api/buckets').then(res => res.json()),
-        fetch(`/api/users/${user.id}/permissions`).then(res => res.json())
-      ]).then(([bucketsData, permissionsData]) => {
-        setAllBuckets(bucketsData);
+        fetch(`/api/users/${user.id}/permissions`).then(res => res.json()),
+        fetch('/api/regions').then(res => res.json())
+      ]).then(([bucketsData, permissionsData, regionsData]) => {
+        setAllBuckets(Array.isArray(bucketsData) ? bucketsData : []);
+        setRegions(Array.isArray(regionsData) ? regionsData : []);
         form.setValue('buckets', permissionsData.buckets || []);
       }).catch(err => {
         console.error("Failed to load data for dialog", err);
@@ -99,9 +114,17 @@ export function AssignBucketsDialog({ user, onOpenChange, onPermissionsChanged }
 
   const assignedBuckets = form.watch('buckets');
 
+  const filteredAndSortedBuckets = useMemo(() => {
+    return allBuckets
+      .filter(bucket => selectedRegion === 'all' || bucket.region === selectedRegion)
+      .filter(bucket => bucket.name.toLowerCase().includes(searchQuery.toLowerCase()))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [allBuckets, selectedRegion, searchQuery]);
+
+
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><ShieldCheck /> Assign Buckets</DialogTitle>
           {user && (
@@ -117,31 +140,65 @@ export function AssignBucketsDialog({ user, onOpenChange, onPermissionsChanged }
         ) : (
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <ScrollArea className="h-48 border rounded-md p-4">
-                <div className="space-y-4">
-                  {allBuckets.length > 0 ? allBuckets.map(bucket => (
-                    <div key={bucket.name} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`bucket-${bucket.name}`}
-                        checked={assignedBuckets.includes(bucket.name)}
-                        onCheckedChange={(checked) => {
-                          const currentBuckets = form.getValues('buckets');
-                          if (checked) {
-                            form.setValue('buckets', [...currentBuckets, bucket.name]);
-                          } else {
-                            form.setValue('buckets', currentBuckets.filter(b => b !== bucket.name));
-                          }
-                        }}
-                      />
-                      <Label htmlFor={`bucket-${bucket.name}`} className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                        {bucket.name}
-                      </Label>
-                    </div>
-                  )) : (
-                    <div className="text-sm text-muted-foreground text-center h-full flex items-center justify-center">No buckets found.</div>
-                  )}
+              <div className="flex flex-col sm:flex-row gap-2">
+                <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                        placeholder="Search buckets..."
+                        className="pl-9"
+                        value={searchQuery}
+                        onChange={e => setSearchQuery(e.target.value)}
+                    />
                 </div>
-              </ScrollArea>
+                <Select value={selectedRegion} onValueChange={setSelectedRegion}>
+                  <SelectTrigger className="w-full sm:w-[200px]">
+                    <SelectValue placeholder="Filter by region" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Regions</SelectItem>
+                    {regions.map(region => (
+                      <SelectItem key={region.id} value={region.id}>{region.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="relative">
+                <div className="text-sm text-muted-foreground mb-2">
+                    Selected {assignedBuckets.length} of {filteredAndSortedBuckets.length} buckets shown.
+                </div>
+                <ScrollArea className="h-64 border rounded-md p-1">
+                    <div className="p-2 space-y-1">
+                    {filteredAndSortedBuckets.length > 0 ? filteredAndSortedBuckets.map(bucket => (
+                        <div key={bucket.name} className="flex items-center rounded-md p-2 hover:bg-accent has-[[data-state=checked]]:bg-accent">
+                        <Checkbox
+                            id={`bucket-${bucket.name}`}
+                            className="mr-3"
+                            checked={assignedBuckets.includes(bucket.name)}
+                            onCheckedChange={(checked) => {
+                            const currentBuckets = form.getValues('buckets');
+                            if (checked) {
+                                form.setValue('buckets', [...currentBuckets, bucket.name]);
+                            } else {
+                                form.setValue('buckets', currentBuckets.filter(b => b !== bucket.name));
+                            }
+                            }}
+                        />
+                        <Label htmlFor={`bucket-${bucket.name}`} className="text-sm font-medium leading-none flex items-center gap-2 w-full cursor-pointer">
+                            <HardDrive className="h-4 w-4 text-muted-foreground" />
+                            <div className="flex flex-col">
+                               <span>{bucket.name}</span>
+                               <span className="text-xs text-muted-foreground">{bucket.region}</span>
+                            </div>
+                        </Label>
+                        </div>
+                    )) : (
+                        <div className="text-sm text-muted-foreground text-center h-full flex items-center justify-center p-8">No buckets match your filters.</div>
+                    )}
+                    </div>
+                </ScrollArea>
+              </div>
+
               <FormField
                 control={form.control}
                 name="reason"
