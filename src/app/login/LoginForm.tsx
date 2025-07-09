@@ -130,7 +130,7 @@ export default function LoginPage() {
         <div className="text-center text-sm text-muted-foreground">
           <p>
             Having trouble?{' '}
-            <a href="#" className="font-medium text-primary hover:underline">
+            <a href="mailto:admin@example.com?subject=S3%20Commander%20Support%20Request" className="font-medium text-primary hover:underline">
               Contact your administrator
             </a>
           </p>
