@@ -167,7 +167,7 @@ export function AssignBucketsDialog({ user, onOpenChange, onPermissionsChanged }
                 <div className="text-sm text-muted-foreground mb-2">
                     Selected {assignedBuckets.length} of {filteredAndSortedBuckets.length} buckets shown.
                 </div>
-                <ScrollArea className="h-64 border rounded-md p-1">
+                <ScrollArea className="h-52 border rounded-md p-1">
                     <div className="p-2 space-y-1">
                     {filteredAndSortedBuckets.length > 0 ? filteredAndSortedBuckets.map(bucket => (
                         <div key={bucket.name} className="flex items-center rounded-md p-2 hover:bg-accent has-[[data-state=checked]]:bg-accent">
