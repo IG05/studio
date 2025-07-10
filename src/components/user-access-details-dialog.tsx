@@ -23,9 +23,10 @@ interface UserAccessDetailsDialogProps {
   currentUser: S3CommanderUser | undefined;
   onOpenChange: (isOpen: boolean) => void;
   onRoleChange: (user: AppUser, role: 'ADMIN' | 'USER') => void;
+  onEditPermissions: (user: AppUser) => void;
 }
 
-export function UserAccessDetailsDialog({ user, currentUser, onOpenChange, onRoleChange }: UserAccessDetailsDialogProps) {
+export function UserAccessDetailsDialog({ user, currentUser, onOpenChange, onRoleChange, onEditPermissions }: UserAccessDetailsDialogProps) {
   const [permissions, setPermissions] = useState<AllUserPermissions | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const isOpen = !!user;
@@ -33,6 +34,7 @@ export function UserAccessDetailsDialog({ user, currentUser, onOpenChange, onRol
   const isPrivilegedUser = user?.role === 'ADMIN' || user?.role === 'OWNER';
   const isOwnerViewing = currentUser?.role === 'owner';
   const canChangeRole = isOwnerViewing && user && user.id !== currentUser.id && user.role !== 'OWNER';
+  const canEditPermissions = user && user.role !== 'OWNER' && !(currentUser?.role === 'admin' && user.role === 'ADMIN');
 
   useEffect(() => {
     if (user && !isPrivilegedUser) {
@@ -167,27 +169,46 @@ export function UserAccessDetailsDialog({ user, currentUser, onOpenChange, onRol
     );
   }
 
-  const renderRoleManagement = () => {
-    if (!canChangeRole || !user) return null;
+  const renderManagementFooter = () => {
+    if (!user) return null;
+    const showRoleManagement = canChangeRole;
+    const showPermissionManagement = canEditPermissions;
+
+    if (!showRoleManagement && !showPermissionManagement) return null;
 
     return (
         <DialogFooter className="flex-col sm:flex-col sm:space-x-0 gap-4 pt-4 mt-4 border-t">
-             <div className="flex items-center gap-2">
-                <UserCog className="h-5 w-5 text-muted-foreground" />
-                <h3 className="font-semibold text-foreground">Role Management</h3>
-            </div>
-             <p className="text-sm text-muted-foreground text-left">
-                Changing a user's role has significant security implications. This action will be logged.
-            </p>
-            {user.role === 'USER' && (
-                <Button variant="outline" onClick={() => onRoleChange(user, 'ADMIN')}>
-                    <ShieldCheck className="mr-2 h-4 w-4" /> Make Admin
-                </Button>
+            {showPermissionManagement && (
+                <div>
+                     <Button variant="outline" className="w-full" onClick={() => onEditPermissions(user)}>
+                        <KeyRound className="mr-2 h-4 w-4" /> Edit Permanent Permissions
+                    </Button>
+                </div>
             )}
-            {user.role === 'ADMIN' && (
-                 <Button variant="destructive" onClick={() => onRoleChange(user, 'USER')}>
-                    <UserIcon className="mr-2 h-4 w-4" /> Make User
-                </Button>
+            
+            {showRoleManagement && (
+                <>
+                <Separator />
+                 <div className="space-y-3 text-left">
+                     <div className="flex items-center gap-2">
+                        <UserCog className="h-5 w-5 text-muted-foreground" />
+                        <h3 className="font-semibold text-foreground">Role Management</h3>
+                    </div>
+                     <p className="text-sm text-muted-foreground">
+                        Changing a user's role has significant security implications. This action will be logged.
+                    </p>
+                    {user.role === 'USER' && (
+                        <Button variant="outline" className="w-full" onClick={() => onRoleChange(user, 'ADMIN')}>
+                            <ShieldCheck className="mr-2 h-4 w-4" /> Make Admin
+                        </Button>
+                    )}
+                    {user.role === 'ADMIN' && (
+                         <Button variant="destructive" className="w-full" onClick={() => onRoleChange(user, 'USER')}>
+                            <UserIcon className="mr-2 h-4 w-4" /> Make User
+                        </Button>
+                    )}
+                </div>
+                </>
             )}
         </DialogFooter>
     );
@@ -212,7 +233,7 @@ export function UserAccessDetailsDialog({ user, currentUser, onOpenChange, onRol
             {renderContent()}
         </div>
 
-        {renderRoleManagement()}
+        {renderManagementFooter()}
 
       </DialogContent>
     </Dialog>

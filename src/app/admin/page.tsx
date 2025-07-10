@@ -280,6 +280,11 @@ export default function AdminPage() {
     }));
   };
 
+  const handleEditPermissions = (user: AppUser) => {
+    setViewingUserAccess(null); // Close the details dialog
+    setPermissionUser(user); // Open the permissions dialog
+  }
+
   const filteredRequests = requests.filter(req => req.status === 'pending');
 
   const filteredUsers = React.useMemo(() => {
@@ -332,6 +337,7 @@ export default function AdminPage() {
          currentUser={session?.user}
          onOpenChange={(isOpen) => !isOpen && setViewingUserAccess(null)}
          onRoleChange={(user, role) => setRoleChangeCandidate({ user, role })}
+         onEditPermissions={handleEditPermissions}
        />
       <div className="flex flex-col h-full w-full">
         <Header title="Admin Dashboard" />
@@ -385,7 +391,7 @@ export default function AdminPage() {
                         <Input placeholder="Search by name or email..." className="pl-9" value={userSearchQuery} onChange={(e) => setUserSearchQuery(e.target.value)} />
                       </div>
                     </div>
-                      <UsersTable users={filteredUsers} onAssignBuckets={setPermissionUser} onUserClick={setViewingUserAccess} isLoading={isLoading} />
+                      <UsersTable users={filteredUsers} onUserClick={setViewingUserAccess} isLoading={isLoading} />
                   </TabsContent>
                   <TabsContent value="logs" className="mt-4">
                       <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-4">
@@ -654,9 +660,7 @@ const LogsTable = ({ logs, isLoading, onViewDetails }: { logs: AuditLog[], isLoa
     );
 };
 
-const UsersTable = ({ users, onAssignBuckets, onUserClick, isLoading }: { users: AppUser[], onAssignBuckets: (user: AppUser) => void, onUserClick: (user: AppUser) => void, isLoading: boolean }) => {
-    const { data: session } = useSession();
-    const currentUserRole = session?.user?.role;
+const UsersTable = ({ users, onUserClick, isLoading }: { users: AppUser[], onUserClick: (user: AppUser) => void, isLoading: boolean }) => {
     
     return (
         <div className="border rounded-lg">
@@ -665,7 +669,6 @@ const UsersTable = ({ users, onAssignBuckets, onUserClick, isLoading }: { users:
                     <TableRow>
                         <TableHead>User</TableHead>
                         <TableHead>Role</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -674,35 +677,21 @@ const UsersTable = ({ users, onAssignBuckets, onUserClick, isLoading }: { users:
                     ) : users.length === 0 ? (
                         <TableRow><TableCell colSpan={3} className="h-24 text-center">No users found.</TableCell></TableRow>
                     ) : users.map((user) => (
-                        <TableRow key={user.id} className="group">
+                        <TableRow key={user.id} className="group hover:bg-muted/50 cursor-pointer" onClick={() => onUserClick(user)}>
                             <TableCell>
-                                <button className="flex items-center gap-3 text-left group-hover:underline" onClick={() => onUserClick(user)}>
+                                <div className="flex items-center gap-3 text-left">
                                     <Avatar><AvatarImage src={user.image || ''} alt={user.name || ''} /><AvatarFallback>{user.name?.charAt(0)}</AvatarFallback></Avatar>
                                     <div>
-                                        <div className="font-medium">{user.name}</div>
+                                        <div className="font-medium group-hover:underline">{user.name}</div>
                                         <div className="text-sm text-muted-foreground">{user.email}</div>
                                     </div>
-                                </button>
+                                </div>
                             </TableCell>
                             <TableCell>
                                 <Badge variant={user.role === 'USER' ? 'secondary' : 'default'} className="capitalize">
                                     {user.role === 'OWNER' ? <Crown className="h-4 w-4 mr-1 text-yellow-500" /> : user.role === 'ADMIN' ? <ShieldCheck className="h-4 w-4 mr-1" /> : <UserIcon className="h-4 w-4 mr-1" />}
                                     {user.role ? user.role.toLowerCase() : 'N/A'}
                                 </Badge>
-                            </TableCell>
-                            <TableCell className="text-right">
-                                <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                        <Button variant="ghost" size="icon" disabled={user.role === 'OWNER' || (currentUserRole === 'admin' && user.role === 'ADMIN')}>
-                                            <MoreVertical className="h-5 w-5" />
-                                        </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent>
-                                        <DropdownMenuItem onClick={() => onAssignBuckets(user)} disabled={user.role === 'OWNER' || (currentUserRole === 'admin' && user.role === 'ADMIN')}>
-                                            <KeyRound className="mr-2 h-4 w-4" /> Assign Permissions
-                                        </DropdownMenuItem>
-                                    </DropdownMenuContent>
-                                </DropdownMenu>
                             </TableCell>
                         </TableRow>
                 ))}
