@@ -30,6 +30,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { CreateFolderDialog } from '@/components/create-folder-dialog';
 import { ViewObjectDialog } from '@/components/view-object-dialog';
@@ -348,7 +349,8 @@ export default function BucketPage() {
                   const displayName = obj.key.substring(currentPrefix.length).replace(/\/$/, '');
                   if (!displayName) return null;
                   const isViewing = interactingObject?.key === obj.key && interactingObject?.action === 'view';
-                  const isDownloading = interactingObject?.key === obj.key && interactingObject?.action === 'delete';
+                  const isDownloading = interactingObject?.key === obj.key && interactingObject?.action === 'download';
+                  const isDeleting = interactingObject?.key === obj.key && interactingObject?.action === 'delete';
                   
                   return (
                   <TableRow key={obj.key}>
