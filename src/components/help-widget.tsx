@@ -26,7 +26,6 @@ const baseKnowledgeTree: ConversationNode[] = [
 ];
 
 const userKnowledgeTree: ConversationNode[] = [
-    ...baseKnowledgeTree,
     {
         id: 'user-main',
         question: "How do I use this application?",
@@ -42,17 +41,22 @@ const userKnowledgeTree: ConversationNode[] = [
                 question: 'How do I check my request status?',
                 answer: 'Click on "My Activity" in the sidebar. The "Request History" tab lists all your pending, approved, and denied requests with their current status. You can click on any request to see its full details.',
             },
+             {
+                id: 'check-file-activity',
+                question: 'How can I see my file activity?',
+                answer: 'Go to the "My Activity" page from the sidebar and click on the "File Activity" tab. This will show you a history of all the files you have uploaded, downloaded, and deleted.',
+            },
             {
                 id: 'view-files',
                 question: 'How do I browse files in a bucket?',
-                answer: 'If you have access to a bucket, click the "Browse" button on the dashboard or click the bucket\'s name in the sidebar to view its contents.',
+                answer: 'If you have access to a bucket, click its name in the sidebar or use the "Browse" button on the dashboard to view its contents.',
             },
         ]
     },
+     ...baseKnowledgeTree,
 ];
 
 const adminKnowledgeTree: ConversationNode[] = [
-    ...baseKnowledgeTree,
     {
         id: 'admin-main',
         question: "How do I manage the system?",
@@ -66,12 +70,12 @@ const adminKnowledgeTree: ConversationNode[] = [
             {
                 id: 'grant-permanent',
                 question: 'Grant permanent permissions?',
-                answer: 'Go to "User Management" on the Admin Dashboard. Click on a user to open their details, then click "Edit Permanent Permissions". This allows you to assign bucket-specific write access and a global delete permission.',
+                answer: 'Go to "User Management" on the Admin Dashboard. Click on a user to open their details, then click "Edit Permanent Permissions" at the bottom of the dialog. This lets you assign bucket-specific write access and a global delete permission.',
             },
             {
                 id: 'view-logs',
                 question: 'View the audit history?',
-                answer: 'The "Access Logs" tab on the "Admin Dashboard" provides a complete, filterable audit trail of all access decisions, role changes, and file operations.',
+                answer: "The \"Access Logs\" tab on the \"Admin Dashboard\" provides a complete audit trail. You can add filters for Event Type, User, and Date Range to narrow down the results. There is also a search bar to quickly find specific log entries.",
             },
             {
                 id: 'change-role',
@@ -79,7 +83,8 @@ const adminKnowledgeTree: ConversationNode[] = [
                 answer: 'From the "User Management" tab, click on a user to open their details. If you are the system Owner, you will see options at the bottom of the dialog to promote a USER to ADMIN or demote an ADMIN to USER.',
             },
         ]
-    }
+    },
+    ...baseKnowledgeTree,
 ];
 
 const TypingIndicator = () => (
@@ -262,5 +267,3 @@ const proseOverride = `
         document.head.appendChild(style);
     }
 })();
-
-    
