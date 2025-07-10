@@ -136,8 +136,7 @@ export function HelpWidget() {
 
   const questionOptions = [
     ...KNOWLEDGE_BASE.general,
-    ...KNOWLEDGE_BASE.user,
-    ...(isAdmin ? KNOWLEDGE_BASE.admin : []),
+    ...(isAdmin ? KNOWLEDGE_BASE.admin : KNOWLEDGE_BASE.user),
   ];
 
   return (
@@ -173,8 +172,8 @@ export function HelpWidget() {
                     <div key={message.id}>
                         {message.type === 'bot' && (
                         <div className="flex items-start gap-3">
-                            <Avatar className="h-8 w-8 border">
-                                <AvatarFallback><Bot className="h-5 w-5" /></AvatarFallback>
+                            <Avatar className="h-8 w-8 border bg-primary/20">
+                                <AvatarFallback><Bot className="h-5 w-5 text-primary" /></AvatarFallback>
                             </Avatar>
                             <div className="p-3 rounded-lg bg-muted text-sm whitespace-pre-wrap font-sans break-words max-w-[85%]">{message.text}</div>
                         </div>
