@@ -172,25 +172,24 @@ export async function PUT(
     try {
         const body = await request.json();
         const contentType = body.contentType;
-
-        if (!contentType) {
-             return NextResponse.json({ error: 'Content-Type is required.' }, { status: 400 });
-        }
-        
         const s3Client = await getS3Client(bucketName);
 
-        // Handle folder creation
+        // Handle folder creation: S3 folders are 0-byte objects with a trailing slash
         if (contentType === 'application/x-directory') {
             const command = new PutObjectCommand({ 
                 Bucket: bucketName, 
-                Key: objectKey,
-                Body: '',
+                Key: objectKey, // The key must end in a '/'
+                Body: '', // Empty body
             });
             await s3Client.send(command);
             return NextResponse.json({ success: true, message: 'Folder created successfully' });
         }
 
         // Handle file upload (presigned URL generation)
+        if (!contentType) {
+             return NextResponse.json({ error: 'Content-Type is required for file uploads.' }, { status: 400 });
+        }
+        
         const command = new PutObjectCommand({ 
             Bucket: bucketName, 
             Key: objectKey,

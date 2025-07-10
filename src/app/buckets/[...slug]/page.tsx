@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/table';
 import { Header } from '@/components/header';
 import type { S3Object } from '@/lib/types';
-import { File, Folder, HardDrive, ChevronRight, Loader2, ShieldAlert, Download, Eye, Upload, Trash2, FolderPlus } from 'lucide-react';
+import { File, Folder, HardDrive, ChevronRight, Loader2, ShieldAlert, Download, Eye, Upload, Trash2, FolderPlus, Search } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -34,6 +34,8 @@ import {
 } from "@/components/ui/alert-dialog"
 import { CreateFolderDialog } from '@/components/create-folder-dialog';
 import { ViewObjectDialog } from '@/components/view-object-dialog';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Separator } from '@/components/ui/separator';
 
 type InteractingObject = {
     key: string;
@@ -55,7 +57,9 @@ export default function BucketPage() {
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [isCreateFolderOpen, setIsCreateFolderOpen] = useState(false);
   const [viewingObject, setViewingObject] = useState<{ bucket: string, key: string } | null>(null);
-
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedObjects, setSelectedObjects] = useState<string[]>([]);
+  
   const path = useMemo(() => pathParts.join('/'), [pathParts]);
   const currentPrefix = useMemo(() => (path ? path + '/' : ''), [path]);
 
@@ -103,6 +107,10 @@ export default function BucketPage() {
       })),
     ];
   }, [bucketName, pathParts]);
+
+  const filteredObjects = useMemo(() => {
+    return objects.filter(obj => obj.key.toLowerCase().includes(searchQuery.toLowerCase()));
+  }, [objects, searchQuery]);
   
   const getSignedUrl = async (objectKey: string, forDownload = false) => {
     const downloadQuery = forDownload ? '?for_download=true' : '';
@@ -181,6 +189,35 @@ export default function BucketPage() {
       setInteractingObject(null);
     }
   }
+
+  const handleDeleteSelected = async () => {
+    const itemsToDelete = [...selectedObjects];
+    setInteractingObject({ key: 'multiple', action: 'delete' });
+    try {
+      await Promise.all(
+        itemsToDelete.map(key =>
+          fetch(`/api/objects/${bucketName}/${key}`, { method: 'DELETE' }).then(res => {
+            if (!res.ok) throw new Error(`Failed to delete ${key}`);
+          })
+        )
+      );
+      toast({
+        title: "Objects Deleted",
+        description: `Successfully deleted ${itemsToDelete.length} items.`,
+      });
+      fetchObjects();
+      setSelectedObjects([]);
+    } catch (err: any) {
+      console.error("Multi-delete failed", err);
+      toast({
+        title: "Delete Error",
+        description: "Some objects could not be deleted.",
+        variant: "destructive",
+      });
+    } finally {
+      setInteractingObject(null);
+    }
+  };
 
   const handleUpload = async () => {
     if (!uploadFile) return;
@@ -262,6 +299,25 @@ export default function BucketPage() {
     }
   };
 
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedObjects(filteredObjects.map(obj => obj.key));
+    } else {
+      setSelectedObjects([]);
+    }
+  };
+
+  const handleSelectObject = (key: string, checked: boolean) => {
+    if (checked) {
+      setSelectedObjects(prev => [...prev, key]);
+    } else {
+      setSelectedObjects(prev => prev.filter(k => k !== key));
+    }
+  };
+
+  const isAllSelected = selectedObjects.length > 0 && selectedObjects.length === filteredObjects.length;
+  const isIndeterminate = selectedObjects.length > 0 && selectedObjects.length < filteredObjects.length;
+
   return (
     <>
     <CreateFolderDialog
@@ -289,27 +345,28 @@ export default function BucketPage() {
           ))}
         </div>
 
-        {canWrite && (
-            <div className="bg-muted p-4 rounded-lg mb-6 flex flex-col sm:flex-row items-center gap-4">
-                <div className="flex-1">
-                    <label htmlFor="file-upload" className="font-semibold text-foreground">Upload & Create</label>
-                    <p className="text-sm text-muted-foreground">Select a file to upload or create a new folder.</p>
-                </div>
-                <div className="flex items-center gap-2 w-full sm:w-auto">
-                    <Input id="file-upload" type="file" onChange={(e) => setUploadFile(e.target.files?.[0] || null)} className="flex-1" />
+        <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-4">
+            <h2 className="text-2xl font-bold tracking-tight">Objects ({objects.length})</h2>
+            {canWrite && (
+              <div className="flex items-center gap-2">
+                <Button onClick={() => setIsCreateFolderOpen(true)} variant="outline">
+                    <FolderPlus className="w-4 h-4 mr-2" /> Create Folder
+                </Button>
+                <div className="flex items-center gap-2 border rounded-md p-1">
+                    <Input id="file-upload" type="file" onChange={(e) => setUploadFile(e.target.files?.[0] || null)} className="flex-1 text-xs h-8 border-none focus-visible:ring-0 focus-visible:ring-offset-0" />
                     <Button onClick={handleUpload} disabled={!uploadFile || interactingObject?.action === 'upload'}>
-                        {interactingObject?.action === 'upload' ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
-                        Upload
-                    </Button>
-                     <Button onClick={() => setIsCreateFolderOpen(true)} variant="outline">
-                        <FolderPlus className="w-4 h-4 mr-2" /> Create Folder
+                        {interactingObject?.action === 'upload' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                        <span className="hidden sm:inline ml-2">Upload</span>
                     </Button>
                 </div>
-            </div>
-        )}
+              </div>
+            )}
+        </div>
 
+        <Separator className="mb-4" />
+        
         {error && (
-            <Alert variant="destructive">
+            <Alert variant="destructive" className="my-4">
                 <ShieldAlert className="h-4 w-4" />
                 <AlertTitle>Access Error</AlertTitle>
                 <AlertDescription>
@@ -318,42 +375,91 @@ export default function BucketPage() {
             </Alert>
         )}
 
+        <div className="my-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div className="relative w-full sm:max-w-xs">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input placeholder="Find objects by prefix" className="pl-9" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+            </div>
+            {selectedObjects.length > 0 && canWrite && (
+                <div className="flex items-center gap-2">
+                    <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                            <Button variant="destructive">
+                                <Trash2 className="w-4 h-4 mr-2" />
+                                Delete ({selectedObjects.length})
+                            </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    This will permanently delete the selected {selectedObjects.length} item(s). This action cannot be undone.
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={handleDeleteSelected}>
+                                    {interactingObject?.action === 'delete' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                    Confirm Delete
+                                </AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+                </div>
+            )}
+        </div>
+
         {!error && <div className="border rounded-lg">
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-[50px]">
+                  <Checkbox 
+                    checked={isAllSelected}
+                    onCheckedChange={(checked) => handleSelectAll(!!checked)}
+                    aria-label="Select all"
+                    data-state={isIndeterminate ? 'indeterminate' : isAllSelected ? 'checked' : 'unchecked'}
+                  />
+                </TableHead>
                 <TableHead>Name</TableHead>
-                <TableHead>Size</TableHead>
+                <TableHead className="hidden md:table-cell">Type</TableHead>
                 <TableHead>Last Modified</TableHead>
+                <TableHead>Size</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="h-32 text-center">
+                  <TableCell colSpan={6} className="h-32 text-center">
                     <div className="flex justify-center items-center">
                       <Loader2 className="w-8 h-8 animate-spin text-primary" />
                       <span className="ml-4">Loading objects...</span>
                     </div>
                   </TableCell>
                 </TableRow>
-              ) : objects.length === 0 ? (
+              ) : filteredObjects.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="h-24 text-center">
-                    This folder is empty.
+                  <TableCell colSpan={6} className="h-24 text-center">
+                    {searchQuery ? 'No objects match your search.' : 'This folder is empty.'}
                   </TableCell>
                 </TableRow>
               ) : (
-                objects.map((obj) => {
+                filteredObjects.map((obj) => {
                   const displayName = obj.key.substring(currentPrefix.length).replace(/\/$/, '');
                   if (!displayName) return null;
-                  const isViewing = interactingObject?.key === obj.key && interactingObject?.action === 'view';
-                  const isDownloading = interactingObject?.key === obj.key && interactingObject?.action === 'download';
-                  const isDeleting = interactingObject?.key === obj.key && interactingObject?.action === 'delete';
-                  
+                  const isInteracting = !!interactingObject;
+                  const fileType = obj.type === 'file' ? obj.key.split('.').pop() || 'file' : 'Folder';
+
                   return (
-                  <TableRow key={obj.key}>
+                  <TableRow key={obj.key} data-state={selectedObjects.includes(obj.key) && "selected"}>
+                    <TableCell>
+                      <Checkbox 
+                        checked={selectedObjects.includes(obj.key)}
+                        onCheckedChange={(checked) => handleSelectObject(obj.key, !!checked)}
+                        aria-label={`Select ${displayName}`}
+                      />
+                    </TableCell>
                     <TableCell className="font-medium">
                       <Link
                         href={
@@ -362,61 +468,31 @@ export default function BucketPage() {
                             : '#'
                         }
                         className="flex items-center gap-3 group"
-                        onClick={(e) => { if (obj.type === 'file') e.preventDefault(); }}
+                        onClick={(e) => { if (obj.type === 'file') { e.preventDefault(); handleView(obj.key); } }}
                       >
                         {obj.type === 'folder' ? (
                           <Folder className="w-5 h-5 text-primary" />
                         ) : (
                           <File className="w-5 h-5 text-muted-foreground" />
                         )}
-                        <span className={cn(obj.type === 'folder' && "group-hover:underline")}>{displayName}</span>
+                        <span className={cn("group-hover:underline")}>{displayName}</span>
                       </Link>
                     </TableCell>
-                    <TableCell>{obj.size ? formatBytes(obj.size) : '--'}</TableCell>
+                    <TableCell className="hidden md:table-cell">{fileType}</TableCell>
                     <TableCell>{format(parseISO(obj.lastModified), 'PPp')}</TableCell>
+                    <TableCell>{obj.size != null ? formatBytes(obj.size) : '--'}</TableCell>
                     <TableCell className="text-right">
                       {obj.type === 'file' && (
                         <div className="flex justify-end gap-2">
                             <Button
-                                variant="outline"
-                                size="sm"
-                                disabled={!!interactingObject}
-                                onClick={() => handleView(obj.key)}
-                            >
-                                {isViewing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Eye className="w-4 h-4 mr-2" />}
-                                {isViewing ? 'Opening...' : 'View'}
-                            </Button>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                disabled={!!interactingObject}
+                                variant="ghost"
+                                size="icon"
+                                title="Download"
+                                disabled={isInteracting}
                                 onClick={() => handleDownload(obj.key)}
                             >
-                                {isDownloading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
-                                {isDownloading ? 'Preparing...' : 'Download'}
+                                {interactingObject?.key === obj.key && interactingObject.action === 'download' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                             </Button>
-                            {canWrite && (
-                                <AlertDialog>
-                                    <AlertDialogTrigger asChild>
-                                        <Button variant="destructive" size="sm" disabled={!!interactingObject}>
-                                            {isDeleting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />}
-                                            Delete
-                                        </Button>
-                                    </AlertDialogTrigger>
-                                    <AlertDialogContent>
-                                        <AlertDialogHeader>
-                                            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                                            <AlertDialogDescription>
-                                                This action cannot be undone. This will permanently delete the file <span className="font-bold">{displayName}</span>.
-                                            </AlertDialogDescription>
-                                        </AlertDialogHeader>
-                                        <AlertDialogFooter>
-                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                            <AlertDialogAction onClick={() => handleDelete(obj.key)}>Continue</AlertDialogAction>
-                                        </AlertDialogFooter>
-                                    </AlertDialogContent>
-                                </AlertDialog>
-                            )}
                         </div>
                       )}
                     </TableCell>
