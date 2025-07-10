@@ -43,6 +43,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { Progress } from '@/components/ui/progress';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 type InteractingObject = {
     key: string;
@@ -259,7 +260,7 @@ export default function BucketPage() {
                     const error = JSON.parse(xhr.responseText);
                     reject(new Error(error.error || `Upload failed with status: ${xhr.status}`));
                 } catch {
-                    reject(new Error(xhr.responseText || `Upload failed with status: ${xhr.status}`));
+                    reject(new Error(xhr.responseText || `Failed to upload file.`));
                 }
             }
         };
@@ -312,6 +313,7 @@ export default function BucketPage() {
             console.error(err);
             toast({ title: 'Upload Error', description: err.message, variant: 'destructive' });
             setUploadProgress(null); // Stop on first error
+            fetchObjects();
             return;
         }
     }
@@ -336,11 +338,11 @@ export default function BucketPage() {
       try {
           const res = await fetch(`/api/objects/${bucketName}/${encodeURIComponent(key)}`, {
               method: 'PUT',
-              body: '', // Empty body is crucial
+              body: '',
           });
           if (!res.ok) {
-              const errorData = await res.json();
-              throw new Error(errorData.error || "Could not create folder.");
+              const errorData = await res.json().catch(() => ({error: 'Could not create folder.'}));
+              throw new Error(errorData.error);
           }
           toast({ title: "Folder Created", description: `Folder "${folderName}" created successfully.` });
           fetchObjects();
@@ -443,23 +445,34 @@ export default function BucketPage() {
         )}
 
         {uploadProgress && (
-            <div className="my-4 p-4 border rounded-lg bg-muted space-y-2">
-                <div className="flex justify-between items-center mb-1">
-                    <p className="text-sm font-medium">
-                        Overall Progress ({uploadProgress.currentFileNumber}/{uploadProgress.totalFiles})
-                    </p>
-                    <p className="text-sm text-muted-foreground">{Math.round(uploadProgress.overallProgress)}%</p>
-                </div>
-                <Progress value={uploadProgress.overallProgress} />
-
-                 <div className="flex justify-between items-center mb-1 pt-2">
-                    <p className="text-sm font-medium truncate pr-4">
-                       Uploading: {uploadProgress.fileName}
-                    </p>
-                    <p className="text-sm text-muted-foreground">{Math.round(uploadProgress.individualProgress)}%</p>
-                </div>
-                <Progress value={uploadProgress.individualProgress} className="h-2" />
-            </div>
+            <Card className="my-4">
+              <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                      <Loader2 className="animate-spin h-5 w-5" />
+                      Uploading Files...
+                  </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                  <div>
+                      <div className="flex justify-between items-center mb-1 text-sm">
+                          <p className="font-medium text-muted-foreground">
+                              Overall Progress ({uploadProgress.currentFileNumber} / {uploadProgress.totalFiles})
+                          </p>
+                          <p className="font-semibold">{Math.round(uploadProgress.overallProgress)}%</p>
+                      </div>
+                      <Progress value={uploadProgress.overallProgress} />
+                  </div>
+                  <div>
+                      <div className="flex justify-between items-center mb-1 text-sm">
+                          <p className="font-medium truncate pr-4">
+                              {uploadProgress.fileName}
+                          </p>
+                          <p className="font-semibold">{Math.round(uploadProgress.individualProgress)}%</p>
+                      </div>
+                      <Progress value={uploadProgress.individualProgress} className="h-2" />
+                  </div>
+              </CardContent>
+            </Card>
         )}
 
         <div className="my-4 flex flex-col sm:flex-row justify-between items-center gap-4">
@@ -580,6 +593,33 @@ export default function BucketPage() {
                             >
                                 {interactingObject?.key === obj.key && interactingObject.action === 'download' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                             </Button>
+                             <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        title="Delete"
+                                        className="text-destructive hover:text-destructive"
+                                        disabled={!canWrite || isInteracting}
+                                    >
+                                        {interactingObject?.key === obj.key && interactingObject.action === 'delete' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                                    </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                <AlertDialogHeader>
+                                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                        This will permanently delete the file <span className="font-medium text-foreground">{displayName}</span>. This action cannot be undone.
+                                    </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => handleDelete(obj.key)} className="bg-destructive hover:bg-destructive/90">
+                                        Delete
+                                    </AlertDialogAction>
+                                </AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
                         </div>
                       )}
                     </TableCell>
@@ -595,3 +635,5 @@ export default function BucketPage() {
     </>
   );
 }
+
+    
