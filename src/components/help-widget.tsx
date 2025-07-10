@@ -25,8 +25,8 @@ type ConversationMessage = {
 const baseQuestions: QnaItem[] = [
   {
     id: 'what-it-does',
-    question: 'What does this application do?',
-    answer: 'S3 Commander is a secure portal for managing access to AWS S3 buckets. It replaces the need to share long-lived credentials by allowing users to request temporary, time-limited access. Administrators can approve or deny these requests, manage permanent permissions, and view a full audit trail of all activities.',
+    question: 'What is S3 Commander?',
+    answer: 'S3 Commander is a secure portal for managing access to AWS S3 buckets. It replaces the need to share long-lived credentials by allowing users to request temporary, time-limited access which administrators can approve or deny.',
   },
 ];
 
@@ -34,22 +34,22 @@ const userQuestions: QnaItem[] = [
   ...baseQuestions,
   {
     id: 'how-to-request',
-    question: 'How do I request temporary access?',
-    answer: 'On the main "S3 Buckets Dashboard", find the bucket you need. If you have "No Access", click the "Request Access" button and fill out the form with your reason and the duration you need.',
+    question: 'How do I request access to a bucket?',
+    answer: 'On the main dashboard, find the bucket you need. If you have "No Access", click the "Request Access" button and fill out the form with your reason and the duration you need.',
   },
   {
     id: 'check-status',
-    question: 'How can I check my request status?',
-    answer: 'Click on "My Requests" in the left sidebar menu. This page lists all your pending, approved, and denied requests with their current status.',
+    question: 'How do I check my request status?',
+    answer: 'Click on "My Requests" in the sidebar. This page lists all your pending, approved, and denied requests with their current status. You can click on any request to see its full details.',
   },
   {
     id: 'view-files',
     question: 'How do I view files in a bucket?',
-    answer: 'If your access status is "Full Access" or "Temporary Access", you can click the "View" button on the dashboard or click the bucket\'s name in the sidebar to browse its contents.',
+    answer: 'If your access status is "Full Access" or "Temporary Access", click the "View" button on the dashboard or click the bucket\'s name in the sidebar to browse its contents.',
   },
   {
     id: 'what-access-means',
-    question: 'What do the different access statuses mean?',
+    question: 'What do the access statuses mean?',
     answer: (
       <ul className="space-y-3">
         <li className="flex items-start gap-3">
@@ -58,62 +58,52 @@ const userQuestions: QnaItem[] = [
         </li>
         <li className="flex items-start gap-3">
             <div className="flex-shrink-0 mt-0.5 h-5 w-5 rounded-full bg-orange-500/20 items-center justify-center flex"><div className="h-2 w-2 rounded-full bg-orange-500"/></div>
-            <div><strong>Temporary Access:</strong> You have been granted access for a limited time. The expiration is shown.</div>
+            <div><strong>Temporary Access:</strong> Your access is approved for a limited time.</div>
         </li>
         <li className="flex items-start gap-3">
             <div className="flex-shrink-0 mt-0.5 h-5 w-5 rounded-full bg-red-500/20 items-center justify-center flex"><div className="h-2 w-2 rounded-full bg-red-500"/></div>
-            <div><strong>No Access:</strong> You currently have no permission and must request it to view contents.</div>
+            <div><strong>No Access:</strong> You have no permissions. You must request access.</div>
         </li>
         <li className="flex items-start gap-3">
             <div className="flex-shrink-0 mt-0.5 h-5 w-5 rounded-full bg-purple-500/20 items-center justify-center flex"><div className="h-2 w-2 rounded-full bg-purple-500"/></div>
-            <div><strong>Revoked:</strong> Your approved temporary access was manually ended by an administrator before it expired.</div>
+            <div><strong>Revoked:</strong> An administrator ended your temporary access early.</div>
         </li>
       </ul>
     ),
   },
-  {
-    id: 'why-revoked',
-    question: 'My approved access was revoked. Why?',
-    answer: 'If your request status is "revoked," it means an administrator manually ended your temporary access before its scheduled expiration time. This is usually done for security or operational reasons, such as when a task is completed early. You can go to the "My Requests" page and view the details of the request to see the specific reason provided by the administrator for the revocation.',
-  },
-  {
-    id: 'max-duration',
-    question: 'What is the maximum access duration I can request?',
-    answer: 'You can request temporary access for any duration from 15 minutes up to a maximum of one year (365 days). Use the days, hours, and minutes fields in the request form to specify the exact duration you need.',
-  }
 ];
 
 const adminQuestions: QnaItem[] = [
     ...baseQuestions,
   {
-    id: 'approve-deny',
-    question: 'How do I approve or deny requests?',
-    answer: 'Navigate to the "Admin Dashboard" via the sidebar. The "Pending Requests" tab lists all active requests. Use the green check (✓) to approve or the red X to deny a request. You must provide a reason for your decision.',
+    id: 'admin-workflow',
+    question: 'What is the main admin workflow?',
+    answer: 'Go to the "Admin Dashboard". In "Pending Requests", approve or deny access. In "Active Permissions", you can revoke access. In "User Management", you can assign permanent permissions and manage roles. All actions are recorded in the "Access Logs" tab.',
   },
   {
-    id: 'revoke-access',
-    question: 'How do I revoke a user\'s temporary access?',
-    answer: 'Navigate to the "Admin Dashboard" and click on the "Active Permissions" tab. This shows all users with currently active temporary access. Find the user you wish to act on and click the "Revoke" button. You will be required to provide a reason for the revocation for the audit log.',
+    id: 'approve-deny',
+    question: 'How do I approve or deny requests?',
+    answer: 'Navigate to the "Admin Dashboard". The "Pending Requests" tab lists all active requests. Use the green check (✓) to approve or the red X to deny a request. A reason is required for your decision.',
   },
   {
     id: 'grant-permanent',
     question: 'How do I grant permanent access?',
-    answer: 'On the "Admin Dashboard", go to the "User Management" tab. Click the action menu (⋮) for the desired user and select "Assign Buckets" to manage their permanent permissions.',
+    answer: 'On the "Admin Dashboard", go to the "User Management" tab. Click the action menu (⋮) for a user and select "Assign Buckets".',
   },
   {
-    id: 'view-history',
-    question: 'How can I view administrative history?',
-    answer: 'The "Access Logs" tab on the "Admin Dashboard" provides a complete audit trail of all access decisions, role changes, and permission modifications made by all administrators.',
+    id: 'view-user-permissions',
+    question: 'How do I see all of a user\'s permissions?',
+    answer: 'In "User Management", simply click on a user\'s name. A dialog will appear showing all their permanent and active temporary permissions in one place.',
   },
   {
     id: 'change-role',
     question: 'How do I change a user\'s role?',
-    answer: 'From the "User Management" tab, click the action menu (⋮) for a user. Please note: Only users with the "OWNER" role can promote users to Admin or demote an Admin back to a User.',
+    answer: 'From the "User Management" tab, click the action menu (⋮) for a user to change their role. Note: Only the "OWNER" can promote users to "ADMIN".',
   },
   {
-    id: 'view-request-details',
-    question: 'Where can I see the full details of a request?',
-    answer: 'In the "Access Logs" tab, find the relevant \'ACCESS_REQUEST_DECISION\' event. Click the action menu (⋮) and select "View Details" to see a full summary, including the original user\'s justification and the deciding admin\'s reason.',
+    id: 'view-logs',
+    question: 'Where can I see the audit history?',
+    answer: 'The "Access Logs" tab on the "Admin Dashboard" provides a complete, filterable audit trail of all access decisions, role changes, and permission modifications.',
   }
 ];
 
