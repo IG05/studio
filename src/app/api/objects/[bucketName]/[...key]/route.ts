@@ -175,6 +175,7 @@ export async function PUT(
         const s3Client = await getS3Client(bucketName);
         
         // If the key ends with a '/', it's a folder creation request.
+        // This is the CRITICAL fix: check for folder before parsing body.
         if (objectKey.endsWith('/')) {
             const command = new PutObjectCommand({ 
                 Bucket: bucketName, 
@@ -184,7 +185,7 @@ export async function PUT(
             await s3Client.send(command);
             return NextResponse.json({ success: true, message: 'Folder created successfully' });
         } else {
-            // Otherwise, it's a file upload request, so we generate a presigned URL.
+            // Otherwise, it's a file upload request. Now we can safely parse the body.
             try {
                 const body = await request.json();
                 const contentType = body.contentType;
@@ -202,6 +203,7 @@ export async function PUT(
 
                 return NextResponse.json({ url: signedUrl });
             } catch (error) {
+                 // This catch block will now only trigger for genuine file upload issues.
                  return NextResponse.json({ error: 'Invalid request body. For file uploads, a JSON body with contentType is required.' }, { status: 400 });
             }
         }
