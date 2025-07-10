@@ -24,11 +24,14 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { RequestAccessDialog } from '@/components/request-access-dialog';
-import { Eye, Edit, Timer, ChevronRight, Search } from 'lucide-react';
+import { Eye, Edit, Timer, ChevronRight, Search, CheckCircle } from 'lucide-react';
 import { formatDistanceToNow, parseISO } from 'date-fns';
 import Link from 'next/link';
 import { Input } from '@/components/ui/input';
 import { formatBytes } from '@/lib/utils';
+import { Checkbox } from '@/components/ui/checkbox';
+import { MultiRequestAccessDialog } from '@/components/multi-request-access-dialog';
+
 
 export default function DashboardPage() {
   const [selectedRegion, setSelectedRegion] = React.useState('all');
@@ -36,6 +39,7 @@ export default function DashboardPage() {
   const [buckets, setBuckets] = React.useState<Bucket[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState('');
+  const [selectedBuckets, setSelectedBuckets] = React.useState<Bucket[]>([]);
 
   const regionsById = React.useMemo(() => {
     return regions.reduce((acc, region) => {
@@ -46,6 +50,7 @@ export default function DashboardPage() {
 
   const fetchBuckets = React.useCallback(() => {
     setIsLoading(true);
+    setSelectedBuckets([]); // Reset selection on fetch
     const regionQuery = selectedRegion === 'all' ? '' : `?region=${selectedRegion}`;
     fetch(`/api/buckets${regionQuery}`, { cache: 'no-store' })
       .then(async (res) => {
@@ -95,7 +100,21 @@ export default function DashboardPage() {
       bucket.name.toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [buckets, searchQuery]);
+  
+  const readOnlyBuckets = React.useMemo(() => filteredBuckets.filter(b => b.access === 'read-only'), [filteredBuckets]);
 
+  const handleSelectBucket = (bucket: Bucket, checked: boolean) => {
+    setSelectedBuckets(prev => 
+        checked ? [...prev, bucket] : prev.filter(b => b.name !== bucket.name)
+    );
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    setSelectedBuckets(checked ? readOnlyBuckets : []);
+  };
+  
+  const isAllSelected = readOnlyBuckets.length > 0 && selectedBuckets.length === readOnlyBuckets.length;
+  const isIndeterminate = selectedBuckets.length > 0 && selectedBuckets.length < readOnlyBuckets.length;
 
   const getAccessInfo = (bucket: Bucket) => {
     switch (bucket.access) {
@@ -150,11 +169,33 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
+        
+        {selectedBuckets.length > 0 && (
+            <div className="mb-4 p-3 bg-muted rounded-lg flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                    <CheckCircle className="h-5 w-5 text-primary" />
+                    <span>{selectedBuckets.length} bucket(s) selected</span>
+                </div>
+                <MultiRequestAccessDialog buckets={selectedBuckets} onAccessRequest={fetchBuckets}>
+                    <Button>Request Write Access</Button>
+                </MultiRequestAccessDialog>
+            </div>
+        )}
 
         <div className="border rounded-lg">
             <Table>
                 <TableHeader>
                     <TableRow>
+                        <TableHead className="w-[50px]">
+                            {readOnlyBuckets.length > 0 && (
+                                <Checkbox 
+                                    checked={isAllSelected}
+                                    onCheckedChange={(checked) => handleSelectAll(!!checked)}
+                                    aria-label="Select all read-only buckets"
+                                    data-state={isIndeterminate ? 'indeterminate' : isAllSelected ? 'checked' : 'unchecked'}
+                                />
+                            )}
+                        </TableHead>
                         <TableHead>Bucket Name</TableHead>
                         <TableHead>Region</TableHead>
                         <TableHead>Bucket Size</TableHead>
@@ -167,20 +208,30 @@ export default function DashboardPage() {
                     {isLoading ? (
                         Array.from({ length: 5 }).map((_, i) => (
                             <TableRow key={i}>
-                                <TableCell colSpan={6}><Skeleton className="h-8 w-full" /></TableCell>
+                                <TableCell colSpan={7}><Skeleton className="h-8 w-full" /></TableCell>
                             </TableRow>
                         ))
                     ) : filteredBuckets.length === 0 ? (
                         <TableRow>
-                            <TableCell colSpan={6} className="h-24 text-center">No buckets found matching the configured tag.</TableCell>
+                            <TableCell colSpan={7} className="h-24 text-center">No buckets found matching the configured tag.</TableCell>
                         </TableRow>
                     ) : (
                         filteredBuckets.map((bucket) => {
                             const accessInfo = getAccessInfo(bucket);
                             const regionName = bucket.region ? regionsById[bucket.region] || bucket.region : 'Unknown';
+                            const isReadOnly = bucket.access === 'read-only';
 
                             return (
-                                <TableRow key={bucket.name}>
+                                <TableRow key={bucket.name} data-state={selectedBuckets.some(b => b.name === bucket.name) ? "selected" : undefined}>
+                                    <TableCell>
+                                        {isReadOnly && (
+                                            <Checkbox
+                                                checked={selectedBuckets.some(b => b.name === bucket.name)}
+                                                onCheckedChange={(checked) => handleSelectBucket(bucket, !!checked)}
+                                                aria-label={`Select bucket ${bucket.name}`}
+                                            />
+                                        )}
+                                    </TableCell>
                                     <TableCell className="font-medium">{bucket.name}</TableCell>
                                     <TableCell>
                                         <div className="font-medium">{regionName}</div>
@@ -213,7 +264,7 @@ export default function DashboardPage() {
                                                     <ChevronRight className="w-4 h-4 ml-2" />
                                                 </Link>
                                             </Button>
-                                            {bucket.access === 'read-only' && (
+                                            {isReadOnly && (
                                                 <RequestAccessDialog bucket={bucket} onAccessRequest={fetchBuckets}>
                                                     <Button variant="default" size="sm">
                                                         Request Write

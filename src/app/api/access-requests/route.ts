@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import type { NextRequest } from 'next/server';
 import { connectToDatabase, fromMongo } from '@/lib/mongodb';
+import type { Bucket } from '@/lib/types';
 
 export async function GET() {
     const session = await getServerSession(authOptions);
@@ -47,9 +48,9 @@ export async function POST(request: NextRequest) {
 
     try {
         const body = await request.json();
-        const { bucketName, region, reason, durationInMinutes } = body;
+        const { buckets, reason, durationInMinutes } = body as { buckets: Bucket[], reason: string, durationInMinutes: number };
 
-        if (!bucketName || !region || !reason || typeof durationInMinutes !== 'number') {
+        if (!Array.isArray(buckets) || buckets.length === 0 || !reason || typeof durationInMinutes !== 'number') {
             return NextResponse.json({ error: 'Missing or invalid required fields' }, { status: 400 });
         }
         
@@ -57,29 +58,36 @@ export async function POST(request: NextRequest) {
         if (durationInMinutes < 15 || durationInMinutes > 525600) {
             return NextResponse.json({ error: 'Duration must be between 15 minutes and 1 year.' }, { status: 400 });
         }
+        
+        const { db } = await connectToDatabase();
+        const accessRequestsCollection = db.collection('accessRequests');
 
-        const newRequestData = {
-            bucketName,
-            region,
+        const newRequests = buckets.map(bucket => ({
+            bucketName: bucket.name,
+            region: bucket.region,
             reason,
             durationInMinutes,
-            status: 'pending',
+            status: 'pending' as const,
             expiresAt: null,
             requestedAt: new Date(),
             // Denormalize user data for easier access
-            userId: session.user.id,
-            userName: session.user.name,
-            userEmail: session.user.email,
-            userImage: session.user.image,
+            userId: session.user!.id,
+            userName: session.user!.name,
+            userEmail: session.user!.email,
+            userImage: session.user!.image,
             denialReason: null,
-        };
+        }));
 
-        const { db } = await connectToDatabase();
-        const result = await db.collection('accessRequests').insertOne(newRequestData);
+        const result = await accessRequestsCollection.insertMany(newRequests);
 
-        const newRequest = { ...newRequestData, _id: result.insertedId };
+        if (result.insertedCount !== buckets.length) {
+            // This indicates a partial failure, which is complex to handle perfectly without transactions.
+            // For now, we'll return a server error.
+            console.error(`Attempted to insert ${buckets.length} requests, but only ${result.insertedCount} were inserted.`);
+            return NextResponse.json({ error: 'Failed to create all access requests.' }, { status: 500 });
+        }
         
-        return NextResponse.json(fromMongo(newRequest), { status: 201 });
+        return NextResponse.json({ success: true, count: result.insertedCount }, { status: 201 });
     
     } catch (error) {
         console.error("Failed to create access request:", error);

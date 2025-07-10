@@ -50,6 +50,8 @@ import type { DateRange } from 'react-day-picker';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { isEqual } from 'lodash';
+import { Checkbox } from '@/components/ui/checkbox';
+import { BulkActionDialog } from '@/components/bulk-action-dialog';
 
 const ALL_EVENT_TYPES: AuditLog['eventType'][] = [
     'ACCESS_REQUEST_DECISION',
@@ -102,11 +104,16 @@ export default function AdminPage() {
     user: false,
     date: false
   });
+  
+  const [selectedRequestIds, setSelectedRequestIds] = React.useState<string[]>([]);
+  const [bulkAction, setBulkAction] = React.useState<'approve' | 'deny' | null>(null);
 
   const [viewingRequest, setViewingRequest] = React.useState<AccessRequest | null>(null);
   const [viewingUserAccess, setViewingUserAccess] = React.useState<AppUser | null>(null);
   const [isDialogLoading, setIsDialogLoading] = React.useState(false);
   const [isLogsLoading, setIsLogsLoading] = React.useState(true);
+  
+  const pendingRequests = React.useMemo(() => requests.filter(req => req.status === 'pending'), [requests]);
 
   const fetchNonLogData = React.useCallback(async () => {
     setIsLoading(true);
@@ -220,6 +227,43 @@ export default function AdminPage() {
         });
     });
   };
+  
+   const handleBulkUpdateRequest = async (requestIds: string[], status: 'approved' | 'denied', reason: string) => {
+    try {
+        const res = await fetch('/api/access-requests/bulk-update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ requestIds, status, reason }),
+        });
+
+        const result = await res.json();
+        if (!res.ok) throw new Error(result.error || 'Bulk update failed');
+
+        toast({
+            title: 'Bulk Update Successful',
+            description: `${result.successCount} request(s) were successfully ${status}.`,
+        });
+
+        if (result.errorCount > 0) {
+            toast({
+                title: 'Some Requests Failed',
+                description: `${result.errorCount} request(s) could not be updated. Check the logs for more details.`,
+                variant: 'destructive'
+            });
+        }
+    } catch(err: any) {
+        toast({
+            title: 'Bulk Update Error',
+            description: err.message,
+            variant: 'destructive'
+        });
+    } finally {
+        fetchNonLogData();
+        fetchLogs();
+        setSelectedRequestIds([]); // Clear selection
+    }
+  };
+
 
   const handleViewDetails = async (requestId?: string) => {
     if (!requestId) return;
@@ -288,8 +332,6 @@ export default function AdminPage() {
     setPermissionUser(user); // Open the permissions dialog
   }
 
-  const filteredRequests = requests.filter(req => req.status === 'pending');
-
   const filteredUsers = React.useMemo(() => {
     if (!userSearchQuery) return users;
     return users.filter(user =>
@@ -343,6 +385,16 @@ export default function AdminPage() {
          onRoleChange={(user, role) => setRoleChangeCandidate({ user, role })}
          onEditPermissions={handleEditPermissions}
        />
+       <BulkActionDialog
+            action={bulkAction}
+            requestCount={selectedRequestIds.length}
+            onOpenChange={(isOpen) => !isOpen && setBulkAction(null)}
+            onConfirm={(reason) => {
+                if(bulkAction) {
+                    handleBulkUpdateRequest(selectedRequestIds, bulkAction, reason);
+                }
+            }}
+        />
       <div className="flex flex-col h-full w-full">
         <Header title="Admin Dashboard" />
           <div className="p-4 md:p-6 flex-1 overflow-y-auto">
@@ -354,7 +406,30 @@ export default function AdminPage() {
                     <TabsTrigger value="users">User Management</TabsTrigger>
                 </TabsList>
                   <TabsContent value="pending" className="mt-4">
-                      <RequestsTable requests={filteredRequests} handleApprove={setApprovalCandidate} handleDeny={setDenialCandidate} isLoading={isLoading} />
+                       {selectedRequestIds.length > 0 && (
+                            <div className="mb-4 p-3 bg-muted rounded-lg flex items-center justify-between">
+                                <div className="flex items-center gap-2 text-sm font-medium">
+                                    <CheckCircle className="h-5 w-5 text-primary" />
+                                    <span>{selectedRequestIds.length} request(s) selected</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <Button variant="destructive" size="sm" onClick={() => setBulkAction('deny')}>
+                                        Deny Selected
+                                    </Button>
+                                    <Button variant="default" size="sm" onClick={() => setBulkAction('approve')}>
+                                        Approve Selected
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+                      <RequestsTable 
+                        requests={pendingRequests} 
+                        handleApprove={setApprovalCandidate} 
+                        handleDeny={setDenialCandidate} 
+                        isLoading={isLoading}
+                        selectedRequestIds={selectedRequestIds}
+                        onSelectionChange={setSelectedRequestIds}
+                      />
                   </TabsContent>
                   <TabsContent value="active" className="mt-4">
                     <ActivePermissionsTable requests={activeRequests} handleRevoke={setRevocationCandidate} isLoading={isLoading} />
@@ -433,11 +508,34 @@ export default function AdminPage() {
   );
 }
 
-const RequestsTable = ({ requests, handleApprove, handleDeny, isLoading }: { requests: AccessRequest[], handleApprove: (req: AccessRequest) => void, handleDeny: (req: AccessRequest) => void, isLoading: boolean }) => (
+const RequestsTable = ({ requests, handleApprove, handleDeny, isLoading, selectedRequestIds, onSelectionChange }: { requests: AccessRequest[], handleApprove: (req: AccessRequest) => void, handleDeny: (req: AccessRequest) => void, isLoading: boolean, selectedRequestIds: string[], onSelectionChange: (ids: string[]) => void }) => {
+    
+    const handleSelectAll = (checked: boolean) => {
+        onSelectionChange(checked ? requests.map(req => req.id) : []);
+    };
+    
+    const handleSelectOne = (id: string, checked: boolean) => {
+        onSelectionChange(
+            checked ? [...selectedRequestIds, id] : selectedRequestIds.filter(reqId => reqId !== id)
+        );
+    };
+    
+    const isAllSelected = requests.length > 0 && selectedRequestIds.length === requests.length;
+    const isIndeterminate = selectedRequestIds.length > 0 && selectedRequestIds.length < requests.length;
+    
+    return (
     <div className="border rounded-lg">
         <Table>
             <TableHeader>
             <TableRow>
+                <TableHead className="w-[50px]">
+                     <Checkbox 
+                        checked={isAllSelected}
+                        onCheckedChange={(checked) => handleSelectAll(!!checked)}
+                        aria-label="Select all requests"
+                        data-state={isIndeterminate ? 'indeterminate' : isAllSelected ? 'checked' : 'unchecked'}
+                    />
+                </TableHead>
                 <TableHead>User</TableHead>
                 <TableHead>Bucket</TableHead>
                 <TableHead>Reason</TableHead>
@@ -448,11 +546,18 @@ const RequestsTable = ({ requests, handleApprove, handleDeny, isLoading }: { req
             </TableHeader>
             <TableBody>
             {isLoading ? (
-              Array.from({ length: 3 }).map((_, i) => (<TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-8 w-full" /></TableCell></TableRow>))
+              Array.from({ length: 3 }).map((_, i) => (<TableRow key={i}><TableCell colSpan={7}><Skeleton className="h-8 w-full" /></TableCell></TableRow>))
             ) : requests.length === 0 ? (
-                <TableRow><TableCell colSpan={6} className="h-24 text-center">No pending requests.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={7} className="h-24 text-center">No pending requests.</TableCell></TableRow>
             ) : requests.map((req) => (
-                <TableRow key={req.id}>
+                <TableRow key={req.id} data-state={selectedRequestIds.includes(req.id) ? 'selected' : undefined}>
+                <TableCell>
+                    <Checkbox
+                        checked={selectedRequestIds.includes(req.id)}
+                        onCheckedChange={(checked) => handleSelectOne(req.id, !!checked)}
+                        aria-label={`Select request from ${req.userName}`}
+                    />
+                </TableCell>
                 <TableCell>
                     <div className="flex items-center gap-3">
                     <Avatar><AvatarImage src={req.userImage || ''} alt={req.userName || ''} /><AvatarFallback>{req.userName?.charAt(0)}</AvatarFallback></Avatar>
@@ -477,7 +582,8 @@ const RequestsTable = ({ requests, handleApprove, handleDeny, isLoading }: { req
             </TableBody>
         </Table>
     </div>
-);
+    )
+};
 
 const ActivePermissionsTable = ({ requests, handleRevoke, isLoading }: { requests: AccessRequest[], handleRevoke: (req: AccessRequest) => void, isLoading: boolean }) => (
     <div className="border rounded-lg">
@@ -544,6 +650,8 @@ const LogsTable = ({ logs, isLoading, onViewDetails }: { logs: AuditLog[], isLoa
         switch (log.eventType) {
             case 'ACCESS_REQUEST_DECISION': {
                 const targetBucketHtml = <span className="font-semibold">{log.target.bucketName}</span>;
+                const isBulk = !!log.details.isBulk;
+                const count = log.details.requestCount || 1;
                 return (
                     <div>
                         <div>
@@ -552,6 +660,7 @@ const LogsTable = ({ logs, isLoading, onViewDetails }: { logs: AuditLog[], isLoa
                             {targetUserHtml}
                             <span> to bucket </span>
                             {targetBucketHtml}.
+                            {isBulk && <span className="text-xs text-muted-foreground"> (part of bulk action for {count} requests)</span>}
                         </div>
                         {reasonHtml}
                     </div>
@@ -838,5 +947,3 @@ function DateRangeFilter({ dateRange, onDateChange }: { dateRange: DateRange | u
         </Popover>
     );
 }
-
-    
