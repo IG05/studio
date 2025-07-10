@@ -16,7 +16,7 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { LayoutDashboard, ShieldCheck, LogOut, HardDrive, ChevronRight, History, Clock } from 'lucide-react';
+import { LayoutDashboard, ShieldCheck, LogOut, HardDrive, ChevronRight, History, Edit } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
     Collapsible,
@@ -53,7 +53,7 @@ export function AppSidebar() {
     setIsLoadingBuckets(true);
     // This API call implicitly uses the user's authentication
     // context on the server to return only buckets they have access to.
-    fetch('/api/buckets?access=full,limited')
+    fetch('/api/buckets')
       .then(res => {
         if (!res.ok) return [];
         return res.json();
@@ -128,7 +128,7 @@ export function AppSidebar() {
                             "flex items-center w-full text-sm rounded-md p-2 hover:bg-sidebar-accent gap-2",
                             pathname.startsWith(`/buckets/${bucket.name}`) && "bg-sidebar-accent"
                         )}>
-                            {bucket.access === 'limited' && <Clock className="w-4 h-4 text-orange-400 shrink-0" />}
+                            {bucket.access === 'read-write' && <Edit className="w-4 h-4 text-green-400 shrink-0" />}
                             <span className="truncate">{bucket.name}</span>
                         </Link>
                         </SidebarMenuItem>

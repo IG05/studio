@@ -13,21 +13,35 @@ import {
 } from '@/components/ui/table';
 import { Header } from '@/components/header';
 import type { S3Object } from '@/lib/types';
-import { File, Folder, HardDrive, ChevronRight, Loader2, ShieldAlert, Download, Eye } from 'lucide-react';
+import { File, Folder, HardDrive, ChevronRight, Loader2, ShieldAlert, Download, Eye, Upload, Trash2 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { toast } from '@/hooks/use-toast';
 import { formatBytes } from '@/lib/utils';
+import { useSession } from 'next-auth/react';
+import { Input } from '@/components/ui/input';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 type InteractingObject = {
     key: string;
-    action: 'view' | 'download';
+    action: 'view' | 'download' | 'delete' | 'upload';
 } | null;
 
 export default function BucketPage() {
   const params = useParams();
+  const { data: session } = useSession();
   const slug = (params.slug || []) as string[];
   const [bucketName, ...pathParts] = slug;
   
@@ -35,10 +49,13 @@ export default function BucketPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [interactingObject, setInteractingObject] = useState<InteractingObject>(null);
+  const [canWrite, setCanWrite] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
 
   const path = useMemo(() => pathParts.join('/'), [pathParts]);
+  const currentPrefix = useMemo(() => (path ? path + '/' : ''), [path]);
 
-  useEffect(() => {
+  const fetchObjects = () => {
     if (!bucketName) return;
     
     setIsLoading(true);
@@ -52,6 +69,7 @@ export default function BucketPage() {
         if (!res.ok) {
             throw new Error(data.error || `Server responded with status: ${res.status}`);
         }
+        setCanWrite(res.headers.get('X-S3-Commander-Write-Access') === 'true');
         return data as S3Object[];
       })
       .then(data => {
@@ -64,6 +82,11 @@ export default function BucketPage() {
       .finally(() => {
         setIsLoading(false);
       });
+  };
+
+  useEffect(() => {
+    fetchObjects();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bucketName, path]);
 
   const breadcrumbs = useMemo(() => {
@@ -77,10 +100,6 @@ export default function BucketPage() {
     ];
   }, [bucketName, pathParts]);
   
-  const currentPrefix = useMemo(() => {
-    return pathParts.length > 0 ? pathParts.join('/') + '/' : '';
-  }, [pathParts]);
-
   const getSignedUrl = async (objectKey: string, forDownload = false) => {
     const downloadQuery = forDownload ? '?for_download=true' : '';
     const res = await fetch(`/api/objects/${bucketName}/${objectKey}${downloadQuery}`);
@@ -114,8 +133,6 @@ export default function BucketPage() {
         const url = await getSignedUrl(objectKey, true);
         const link = document.createElement('a');
         link.href = url;
-        // The download attribute is no longer strictly necessary if Content-Disposition is set by the server,
-        // but it acts as a good fallback.
         link.setAttribute('download', objectKey.split('/').pop() || objectKey);
         document.body.appendChild(link);
         link.click();
@@ -132,11 +149,83 @@ export default function BucketPage() {
     }
   };
 
+  const handleDelete = async (objectKey: string) => {
+    setInteractingObject({ key: objectKey, action: 'delete' });
+    try {
+      const res = await fetch(`/api/objects/${bucketName}/${objectKey}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to delete object.");
+      }
+      toast({ title: "Object Deleted", description: `Successfully deleted ${objectKey}` });
+      fetchObjects(); // Refresh the list
+    } catch (err: any) {
+       console.error("Delete failed", err);
+        toast({
+            title: 'Delete Error',
+            description: err.message || 'Could not delete the file.',
+            variant: 'destructive',
+        });
+    } finally {
+      setInteractingObject(null);
+    }
+  }
+
+  const handleUpload = async () => {
+    if (!uploadFile) return;
+
+    setInteractingObject({ key: uploadFile.name, action: 'upload' });
+
+    try {
+        const key = `${currentPrefix}${uploadFile.name}`;
+        // Get a presigned URL for upload
+        const presignedRes = await fetch(`/api/objects/${bucketName}/${key}?upload=true`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contentType: uploadFile.type })
+        });
+
+        if (!presignedRes.ok) {
+            const data = await presignedRes.json();
+            throw new Error(data.error || "Could not get an upload URL.");
+        }
+
+        const { url } = await presignedRes.json();
+
+        // Upload the file directly to S3 using the presigned URL
+        const uploadRes = await fetch(url, {
+            method: 'PUT',
+            body: uploadFile,
+            headers: { 'Content-Type': uploadFile.type },
+        });
+
+        if (!uploadRes.ok) {
+            throw new Error("File upload to S3 failed.");
+        }
+
+        toast({ title: "Upload Successful", description: `File ${uploadFile.name} uploaded.` });
+        setUploadFile(null);
+        fetchObjects(); // Refresh list
+
+    } catch (err: any) {
+        console.error("Upload failed", err);
+        toast({
+            title: 'Upload Error',
+            description: err.message || 'Could not upload the file.',
+            variant: 'destructive',
+        });
+    } finally {
+        setInteractingObject(null);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full w-full">
       <Header title="Object Browser" />
       <div className="p-4 md:p-6 flex-1 overflow-y-auto">
-        <div className="flex items-center gap-2 mb-6 text-sm text-muted-foreground">
+        <div className="flex items-center gap-2 mb-4 text-sm text-muted-foreground">
           <HardDrive className="w-4 h-4" />
           {breadcrumbs.map((crumb, i) => (
             <Fragment key={crumb.href}>
@@ -147,6 +236,26 @@ export default function BucketPage() {
             </Fragment>
           ))}
         </div>
+
+        {canWrite && (
+            <div className="bg-muted p-4 rounded-lg mb-6 flex flex-col sm:flex-row items-center gap-4">
+                <div className="flex-1">
+                    <label htmlFor="file-upload" className="font-semibold text-foreground">Upload a file</label>
+                    <p className="text-sm text-muted-foreground">Select a file to upload to the current folder.</p>
+                </div>
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <Input id="file-upload" type="file" onChange={(e) => setUploadFile(e.target.files?.[0] || null)} className="flex-1" />
+                    <Button onClick={handleUpload} disabled={!uploadFile || interactingObject?.action === 'upload'}>
+                        {interactingObject?.action === 'upload' ? (
+                             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                            <Upload className="w-4 h-4 mr-2" />
+                        )}
+                        Upload
+                    </Button>
+                </div>
+            </div>
+        )}
 
         {error && (
             <Alert variant="destructive">
@@ -190,6 +299,7 @@ export default function BucketPage() {
                   if (!displayName) return null;
                   const isViewing = interactingObject?.key === obj.key && interactingObject?.action === 'view';
                   const isDownloading = interactingObject?.key === obj.key && interactingObject?.action === 'download';
+                  const isDeleting = interactingObject?.key === obj.key && interactingObject?.action === 'delete';
                   
                   return (
                   <TableRow key={obj.key}>
@@ -221,11 +331,7 @@ export default function BucketPage() {
                                 disabled={!!interactingObject}
                                 onClick={() => handleView(obj.key)}
                             >
-                                {isViewing ? (
-                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                ) : (
-                                    <Eye className="w-4 h-4 mr-2" />
-                                )}
+                                {isViewing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Eye className="w-4 h-4 mr-2" />}
                                 {isViewing ? 'Opening...' : 'View'}
                             </Button>
                             <Button
@@ -234,13 +340,31 @@ export default function BucketPage() {
                                 disabled={!!interactingObject}
                                 onClick={() => handleDownload(obj.key)}
                             >
-                                {isDownloading ? (
-                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                ) : (
-                                    <Download className="w-4 h-4 mr-2" />
-                                )}
+                                {isDownloading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
                                 {isDownloading ? 'Preparing...' : 'Download'}
                             </Button>
+                            {canWrite && (
+                                <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                        <Button variant="destructive" size="sm" disabled={!!interactingObject}>
+                                            {isDeleting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />}
+                                            Delete
+                                        </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                            <AlertDialogDescription>
+                                                This action cannot be undone. This will permanently delete the file <span className="font-bold">{displayName}</span>.
+                                            </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                            <AlertDialogAction onClick={() => handleDelete(obj.key)}>Continue</AlertDialogAction>
+                                        </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                </AlertDialog>
+                            )}
                         </div>
                       )}
                     </TableCell>

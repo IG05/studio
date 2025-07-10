@@ -24,7 +24,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { RequestAccessDialog } from '@/components/request-access-dialog';
-import { Lock, Unlock, Timer, ChevronRight, Search } from 'lucide-react';
+import { Eye, Edit, Timer, ChevronRight, Search } from 'lucide-react';
 import { formatDistanceToNow, parseISO } from 'date-fns';
 import Link from 'next/link';
 import { Input } from '@/components/ui/input';
@@ -44,15 +44,7 @@ export default function DashboardPage() {
     }, {} as Record<string, string>);
   }, [regions]);
 
-  React.useEffect(() => {
-    // Fetch regions
-    fetch('/api/regions')
-      .then(res => res.json())
-      .then(setRegions)
-      .catch(err => console.error("Failed to fetch regions", err));
-  }, []);
-
-  React.useEffect(() => {
+  const fetchBuckets = React.useCallback(() => {
     setIsLoading(true);
     const regionQuery = selectedRegion === 'all' ? '' : `?region=${selectedRegion}`;
     fetch(`/api/buckets${regionQuery}`, { cache: 'no-store' })
@@ -84,6 +76,19 @@ export default function DashboardPage() {
       });
   }, [selectedRegion]);
 
+
+  React.useEffect(() => {
+    // Fetch regions
+    fetch('/api/regions')
+      .then(res => res.json())
+      .then(setRegions)
+      .catch(err => console.error("Failed to fetch regions", err));
+  }, []);
+
+  React.useEffect(() => {
+    fetchBuckets();
+  }, [fetchBuckets]);
+
   const filteredBuckets = React.useMemo(() => {
     if (!searchQuery) return buckets;
     return buckets.filter(bucket =>
@@ -94,24 +99,18 @@ export default function DashboardPage() {
 
   const getAccessInfo = (bucket: Bucket) => {
     switch (bucket.access) {
-      case 'full':
+      case 'read-write':
         return {
-          icon: <Unlock className="w-4 h-4 text-green-500" />,
-          label: 'Full Access',
+          icon: <Edit className="w-4 h-4 text-green-500" />,
+          label: 'Read / Write',
           badgeClass: 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300',
         };
-      case 'limited':
-        return {
-          icon: <Timer className="w-4 h-4 text-orange-500" />,
-          label: 'Temporary Access',
-          badgeClass: 'bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-300',
-        };
-      case 'none':
+      case 'read-only':
       default:
         return {
-          icon: <Lock className="w-4 h-4 text-red-500" />,
-          label: 'No Access',
-          badgeClass: 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300',
+          icon: <Eye className="w-4 h-4 text-blue-500" />,
+          label: 'Read-Only',
+          badgeClass: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300',
         };
     }
   };
@@ -159,7 +158,7 @@ export default function DashboardPage() {
                         <TableHead>Bucket Name</TableHead>
                         <TableHead>Region</TableHead>
                         <TableHead>Bucket Size</TableHead>
-                        <TableHead>Access Status</TableHead>
+                        <TableHead>Access Level</TableHead>
                         <TableHead>Expires In</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
@@ -173,12 +172,11 @@ export default function DashboardPage() {
                         ))
                     ) : filteredBuckets.length === 0 ? (
                         <TableRow>
-                            <TableCell colSpan={6} className="h-24 text-center">No buckets found.</TableCell>
+                            <TableCell colSpan={6} className="h-24 text-center">No buckets found matching the configured tag.</TableCell>
                         </TableRow>
                     ) : (
                         filteredBuckets.map((bucket) => {
                             const accessInfo = getAccessInfo(bucket);
-                            const isAccessible = bucket.access === 'full' || bucket.access === 'limited';
                             const regionName = bucket.region ? regionsById[bucket.region] || bucket.region : 'Unknown';
 
                             return (
@@ -195,30 +193,34 @@ export default function DashboardPage() {
                                                 {accessInfo.icon}
                                                 <span>{accessInfo.label}</span>
                                             </div>
+                                            {bucket.access === 'read-write' && bucket.tempAccessExpiresAt && (
+                                                <Timer className="w-4 h-4 ml-2 text-orange-500" />
+                                            )}
                                         </Badge>
                                     </TableCell>
                                     <TableCell>
-                                        {bucket.access === 'limited' && bucket.tempAccessExpiresAt ? (
+                                        {bucket.access === 'read-write' && bucket.tempAccessExpiresAt ? (
                                             formatDistanceToNow(parseISO(bucket.tempAccessExpiresAt), { addSuffix: true })
                                         ) : (
                                             '--'
                                         )}
                                     </TableCell>
                                     <TableCell className="text-right">
-                                        {isAccessible ? (
+                                        <div className="flex items-center justify-end gap-2">
                                             <Button asChild variant="outline" size="sm">
                                                 <Link href={`/buckets/${bucket.name}`}>
-                                                    View
+                                                    Browse
                                                     <ChevronRight className="w-4 h-4 ml-2" />
                                                 </Link>
                                             </Button>
-                                        ) : (
-                                            <RequestAccessDialog bucket={bucket}>
-                                                <Button variant="default" size="sm">
-                                                    Request Access
-                                                </Button>
-                                            </RequestAccessDialog>
-                                        )}
+                                            {bucket.access === 'read-only' && (
+                                                <RequestAccessDialog bucket={bucket} onAccessRequest={fetchBuckets}>
+                                                    <Button variant="default" size="sm">
+                                                        Request Write
+                                                    </Button>
+                                                </RequestAccessDialog>
+                                            )}
+                                        </div>
                                     </TableCell>
                                 </TableRow>
                             )

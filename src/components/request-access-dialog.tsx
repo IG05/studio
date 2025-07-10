@@ -20,7 +20,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/hooks/use-toast';
 import type { Bucket } from '@/lib/types';
-import { S3BucketIcon } from './icons';
+import { Edit } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
 
 const ONE_YEAR_IN_MINUTES = 365 * 24 * 60;
@@ -52,9 +52,10 @@ type RequestAccessFormValues = z.infer<typeof requestAccessSchema>;
 interface RequestAccessDialogProps {
   children: ReactNode;
   bucket: Bucket;
+  onAccessRequest: () => void;
 }
 
-export function RequestAccessDialog({ children, bucket }: RequestAccessDialogProps) {
+export function RequestAccessDialog({ children, bucket, onAccessRequest }: RequestAccessDialogProps) {
   const [open, setOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -63,8 +64,8 @@ export function RequestAccessDialog({ children, bucket }: RequestAccessDialogPro
     defaultValues: {
       reason: '',
       durationDays: 0,
-      durationHours: 0,
-      durationMinutes: 15,
+      durationHours: 8,
+      durationMinutes: 0,
     },
   });
 
@@ -89,10 +90,11 @@ export function RequestAccessDialog({ children, bucket }: RequestAccessDialogPro
       }
 
       toast({
-        title: 'Access Request Submitted',
-        description: `Your request for access to "${bucket.name}" has been sent for approval.`,
+        title: 'Write Access Request Submitted',
+        description: `Your request for write access to "${bucket.name}" has been sent for approval.`,
       });
-      setOpen(false); // Close dialog on success
+      setOpen(false);
+      onAccessRequest(); // Refresh the parent component's data
       form.reset();
 
     } catch (error) {
@@ -113,17 +115,17 @@ export function RequestAccessDialog({ children, bucket }: RequestAccessDialogPro
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <S3BucketIcon className="w-5 h-5" /> Request Access
+            <Edit className="w-5 h-5" /> Request Write Access
           </DialogTitle>
           <DialogDescription>
-            Request temporary access to the bucket: <strong>{bucket.name}</strong>.
-            Please provide a reason and select the desired duration.
+            Request temporary write access to the bucket: <strong>{bucket.name}</strong>.
+            You already have read-only access.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
             <div className="space-y-2">
-                <FormLabel>Duration</FormLabel>
+                <FormLabel>Duration of Write Access</FormLabel>
                 <div className="grid grid-cols-3 items-start gap-4">
                     <FormField
                     control={form.control}
@@ -171,9 +173,9 @@ export function RequestAccessDialog({ children, bucket }: RequestAccessDialogPro
               name="reason"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Reason for Access</FormLabel>
+                  <FormLabel>Reason for Write Access</FormLabel>
                   <FormControl>
-                    <Textarea placeholder="e.g., Need to debug a production issue..." {...field} />
+                    <Textarea placeholder="e.g., Need to upload new data for project X..." {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

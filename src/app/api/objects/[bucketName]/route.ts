@@ -9,20 +9,18 @@ import type { S3Object, S3CommanderUser } from '@/lib/types';
 import { connectToDatabase } from '@/lib/mongodb';
 import { isAfter } from 'date-fns';
 
-async function checkAccess(user: S3CommanderUser, bucketName: string): Promise<boolean> {
+async function checkWriteAccess(user: S3CommanderUser, bucketName: string): Promise<boolean> {
     if (['admin', 'owner'].includes(user.role)) {
         return true;
     }
     
     const { db } = await connectToDatabase();
 
-    // Check for permanent access first
     const permDoc = await db.collection('permissions').findOne({ userId: user.id });
     if (permDoc && permDoc.buckets?.includes(bucketName)) {
         return true;
     }
 
-    // If no permanent access, check for temporary access
     const tempPermissions = await db.collection('accessRequests').find({
         userId: user.id,
         bucketName: bucketName,
@@ -33,10 +31,8 @@ async function checkAccess(user: S3CommanderUser, bucketName: string): Promise<b
     if (tempPermissions.length === 0) {
         return false;
     }
-
-    // Check if there is at least one non-expired permission
+    
     const hasValidTempPermission = tempPermissions.some(permission => {
-        // If expiresAt is not set, it's considered non-expiring. If it is set, check if it's in the future.
         return !permission.expiresAt || !isAfter(new Date(), permission.expiresAt);
     });
 
@@ -60,10 +56,8 @@ export async function GET(
     const user = session.user as S3CommanderUser;
     const bucketName = params.bucketName;
 
-    const hasAccess = await checkAccess(user, bucketName);
-    if (!hasAccess) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    // All visible buckets are readable. Check for write access separately.
+    const hasWriteAccess = await checkWriteAccess(user, bucketName);
 
     try {
         const s3LocationClient = new S3Client({
@@ -116,7 +110,9 @@ export async function GET(
         
         const allObjects = [...folders, ...files].sort((a,b) => a.key.localeCompare(b.key));
 
-        return NextResponse.json(allObjects);
+        const response = NextResponse.json(allObjects);
+        response.headers.set('X-S3-Commander-Write-Access', String(hasWriteAccess));
+        return response;
 
     } catch (error: any) {
         console.error(`Failed to list objects for bucket ${bucketName}:`, error);

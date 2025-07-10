@@ -4,12 +4,13 @@ import type { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import type { Bucket, S3CommanderUser } from '@/lib/types';
-import { S3Client, ListBucketsCommand, GetBucketLocationCommand } from '@aws-sdk/client-s3';
+import { S3Client, GetBucketLocationCommand } from '@aws-sdk/client-s3';
+import { ResourceGroupsTaggingAPIClient, GetResourcesCommand } from '@aws-sdk/client-resource-groups-tagging-api';
 import { CloudWatchClient, GetMetricDataCommand } from '@aws-sdk/client-cloudwatch';
 import { connectToDatabase } from '@/lib/mongodb';
 import { isAfter } from 'date-fns';
 
-async function getPermanentPermissions(userId: string): Promise<string[]> {
+async function getWritePermissions(userId: string): Promise<string[]> {
     const { db } = await connectToDatabase();
     const permDoc = await db.collection('permissions').findOne({ userId });
     return permDoc?.buckets || [];
@@ -27,8 +28,16 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Server is not configured for AWS access. Please check server logs.' }, { status: 500 });
     }
 
+    const tagKey = process.env.S3_VISIBILITY_TAG_KEY;
+    const tagValue = process.env.S3_VISIBILITY_TAG_VALUE;
+
+    if (!tagKey || !tagValue) {
+        console.error("Missing S3_VISIBILITY_TAG_KEY or S3_VISIBILITY_TAG_VALUE in .env file");
+        return NextResponse.json({ error: 'Server is not configured for bucket visibility. Please check server logs.' }, { status: 500 });
+    }
+
     try {
-        const s3Client = new S3Client({
+        const taggingClient = new ResourceGroupsTaggingAPIClient({
             credentials: {
                 accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
                 secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
@@ -36,6 +45,14 @@ export async function GET(request: NextRequest) {
             region: process.env.AWS_REGION!,
         });
 
+        const s3Client = new S3Client({
+            credentials: {
+                accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+                secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+            },
+            region: process.env.AWS_REGION!,
+        });
+        
         const cloudWatchClient = new CloudWatchClient({
             credentials: {
                 accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
@@ -48,32 +65,35 @@ export async function GET(request: NextRequest) {
         const isAdminOrOwner = ['admin', 'owner'].includes(user.role);
         
         const { db } = await connectToDatabase();
+        
+        // Fetch buckets based on tags
+        const taggedResources = await taggingClient.send(new GetResourcesCommand({
+            ResourceTypeFilters: ['s3:bucket'],
+            TagFilters: [{ Key: tagKey, Values: [tagValue] }]
+        }));
 
-        const [s3BucketsResult, tempPermissionsResult, permanentPermissions] = await Promise.all([
-            s3Client.send(new ListBucketsCommand({})),
-            !isAdminOrOwner ? db.collection('accessRequests').find({ userId: user.id, status: 'approved' }).toArray() : Promise.resolve([]),
-            !isAdminOrOwner ? getPermanentPermissions(user.id) : Promise.resolve([])
-        ]);
-
-        const { Buckets: s3Buckets } = s3BucketsResult;
-
-        if (!s3Buckets) {
+        if (!taggedResources.ResourceTagMappingList || taggedResources.ResourceTagMappingList.length === 0) {
             return NextResponse.json([]);
         }
+
+        const bucketArns = taggedResources.ResourceTagMappingList.map(r => r.ResourceARN!);
+        const bucketNames = bucketArns.map(arn => arn.split(':::')[1]);
         
+        const [tempPermissionsResult, permanentWritePermissions] = await Promise.all([
+            db.collection('accessRequests').find({ userId: user.id, status: 'approved' }).toArray(),
+            getWritePermissions(user.id)
+        ]);
+
         let tempPermissions = tempPermissionsResult || [];
 
-        const bucketDataPromises = s3Buckets.map(async (bucket) => {
-            const bucketName = bucket.Name!;
+        const bucketDataPromises = bucketNames.map(async (bucketName) => {
             let region: string | undefined = undefined;
 
             try {
                 const location = await s3Client.send(new GetBucketLocationCommand({ Bucket: bucketName }));
-                // Buckets in 'us-east-1' have a null LocationConstraint.
                 region = location.LocationConstraint || 'us-east-1';
             } catch (e) {
                 console.warn(`Could not get location for bucket ${bucketName}. Error:`, e);
-                // Region will remain undefined if lookup fails
             }
 
             const endTime = new Date();
@@ -111,21 +131,17 @@ export async function GET(request: NextRequest) {
                 console.warn(`Could not get size for bucket ${bucketName}. Maybe no objects or metrics not enabled.`);
             }
 
-            let access: Bucket['access'] = 'none';
+            let access: Bucket['access'] = 'read-only';
             let tempAccessExpiresAt: string | undefined = undefined;
 
-            if (isAdminOrOwner || permanentPermissions.includes(bucketName)) {
-                access = 'full';
-            } else {
-                const permission = tempPermissions.find(p => p.bucketName === bucketName);
-                if (permission) {
-                    if (permission.expiresAt && isAfter(new Date(), permission.expiresAt)) {
-                        access = 'none';
-                    } else {
-                        access = 'limited';
-                        tempAccessExpiresAt = permission.expiresAt?.toISOString();
-                    }
-                }
+            const hasPermanentWrite = permanentWritePermissions.includes(bucketName);
+            const tempWritePermission = tempPermissions.find(p => p.bucketName === bucketName && (!p.expiresAt || !isAfter(new Date(), p.expiresAt)));
+            
+            if (isAdminOrOwner || hasPermanentWrite) {
+                access = 'read-write';
+            } else if (tempWritePermission) {
+                access = 'read-write';
+                tempAccessExpiresAt = tempWritePermission.expiresAt?.toISOString();
             }
 
             return {
@@ -141,17 +157,11 @@ export async function GET(request: NextRequest) {
         
         const { searchParams } = new URL(request.url);
         const regionQuery = searchParams.get('region');
-        const accessQuery = searchParams.get('access');
 
         let filteredBuckets = allBuckets;
 
         if (regionQuery) {
             filteredBuckets = filteredBuckets.filter(b => b.region === regionQuery);
-        }
-
-        if (accessQuery) {
-            const allowedAccessLevels = accessQuery.split(',');
-            filteredBuckets = filteredBuckets.filter(b => allowedAccessLevels.includes(b.access));
         }
         
         return NextResponse.json(filteredBuckets);

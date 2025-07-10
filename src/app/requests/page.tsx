@@ -89,7 +89,7 @@ export default function MyRequestsPage() {
         onOpenChange={(isOpen) => !isOpen && setViewingRequest(null)}
     />
     <div className="flex flex-col h-full w-full">
-      <Header title="My Access Requests" />
+      <Header title="My Write Access Requests" />
         <div className="p-4 md:p-6 flex-1 overflow-y-auto">
             <Tabs value={activeTab} onValueChange={setActiveTab}>
                 <TabsList className="mb-4">
