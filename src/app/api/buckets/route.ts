@@ -65,13 +65,15 @@ export async function GET(request: NextRequest) {
 
         const bucketDataPromises = s3Buckets.map(async (bucket) => {
             const bucketName = bucket.Name!;
-            let region = process.env.AWS_REGION!;
+            let region: string | undefined = undefined;
 
             try {
                 const location = await s3Client.send(new GetBucketLocationCommand({ Bucket: bucketName }));
+                // Buckets in 'us-east-1' have a null LocationConstraint.
                 region = location.LocationConstraint || 'us-east-1';
             } catch (e) {
-                console.warn(`Could not get location for bucket ${bucketName}, defaulting to ${region}. Error:`, e);
+                console.warn(`Could not get location for bucket ${bucketName}. Error:`, e);
+                // Region will remain undefined if lookup fails
             }
 
             const endTime = new Date();

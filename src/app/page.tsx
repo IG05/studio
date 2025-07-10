@@ -37,6 +37,13 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState('');
 
+  const regionsById = React.useMemo(() => {
+    return regions.reduce((acc, region) => {
+        acc[region.id] = region.name;
+        return acc;
+    }, {} as Record<string, string>);
+  }, [regions]);
+
   React.useEffect(() => {
     // Fetch regions
     fetch('/api/regions')
@@ -172,10 +179,15 @@ export default function DashboardPage() {
                         filteredBuckets.map((bucket) => {
                             const accessInfo = getAccessInfo(bucket);
                             const isAccessible = bucket.access === 'full' || bucket.access === 'limited';
+                            const regionName = bucket.region ? regionsById[bucket.region] || bucket.region : 'Unknown';
+
                             return (
                                 <TableRow key={bucket.name}>
                                     <TableCell className="font-medium">{bucket.name}</TableCell>
-                                    <TableCell>{bucket.region}</TableCell>
+                                    <TableCell>
+                                        <div className="font-medium">{regionName}</div>
+                                        {bucket.region && regionName !== bucket.region && <div className="text-sm text-muted-foreground">{bucket.region}</div>}
+                                    </TableCell>
                                     <TableCell>{formatBytes(bucket.size)}</TableCell>
                                     <TableCell>
                                         <Badge className={accessInfo.badgeClass}>

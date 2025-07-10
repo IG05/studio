@@ -21,7 +21,7 @@ export type Region = {
 
 export type Bucket = {
   name: string;
-  region: string;
+  region?: string;
   access: 'full' | 'limited' | 'none';
   tempAccessExpiresAt?: string;
   size?: number;
