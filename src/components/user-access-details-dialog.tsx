@@ -9,13 +9,11 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from '@/components/ui/badge';
 import type { AppUser } from '@/lib/types';
 import { toast } from '@/hooks/use-toast';
-import { Loader2, KeyRound, Timer, ShieldCheck, HardDrive } from 'lucide-react';
+import { Loader2, KeyRound, Timer, ShieldCheck, HardDrive, Info } from 'lucide-react';
 import { format, parseISO, formatDistanceToNow } from 'date-fns';
-import { ScrollArea } from './ui/scroll-area';
 
 interface UserAccessDetailsDialogProps {
   user: AppUser | null;
@@ -35,9 +33,11 @@ export function UserAccessDetailsDialog({ user, onOpenChange }: UserAccessDetail
   const [permissions, setPermissions] = useState<UserPermissions | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const isOpen = !!user;
+  
+  const isPrivilegedUser = user?.role === 'ADMIN' || user?.role === 'OWNER';
 
   useEffect(() => {
-    if (user) {
+    if (user && !isPrivilegedUser) {
       setIsLoading(true);
       fetch(`/api/users/${user.id}/all-permissions`)
         .then(res => {
@@ -61,8 +61,79 @@ export function UserAccessDetailsDialog({ user, onOpenChange }: UserAccessDetail
         });
     } else {
       setPermissions(null);
+      setIsLoading(false);
     }
-  }, [user]);
+  }, [user, isPrivilegedUser]);
+
+  const renderContent = () => {
+    if (isLoading) {
+        return (
+            <div className="flex justify-center items-center h-48">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+        );
+    }
+
+    if (isPrivilegedUser) {
+        return (
+            <div className="text-center text-muted-foreground py-10 px-4 flex flex-col items-center gap-4">
+              <Info className="h-10 w-10 text-blue-500" />
+              <p className="font-semibold text-foreground">
+                As an {user?.role.toLowerCase()}, this user has unrestricted access to all S3 buckets.
+              </p>
+              <p className="text-sm">Their permissions are inherent to their role and are not listed individually.</p>
+            </div>
+        );
+    }
+
+    if (!permissions || (!permissions.permanent.length && !permissions.temporary.length)) {
+        return (
+            <div className="text-center text-muted-foreground py-10">
+              This user has no assigned permissions.
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-6 py-2">
+          {permissions.permanent.length > 0 && (
+            <div>
+              <h3 className="font-semibold flex items-center gap-2 mb-2"><ShieldCheck className="h-4 w-4 text-green-500" /> Permanent Access</h3>
+              <div className="space-y-2 p-3 border rounded-lg">
+                {permissions.permanent.map(bucketName => (
+                  <div key={bucketName} className="flex items-center gap-2 text-sm">
+                    <HardDrive className="h-4 w-4 text-muted-foreground" />
+                    <span className="font-medium">{bucketName}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {permissions.temporary.length > 0 && (
+            <div>
+              <h3 className="font-semibold flex items-center gap-2 mb-2"><Timer className="h-4 w-4 text-orange-500" /> Temporary Access</h3>
+              <div className="space-y-2 p-3 border rounded-lg">
+                {permissions.temporary.map(access => (
+                  <div key={access.bucketName} className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-2">
+                      <HardDrive className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <div className="font-medium">{access.bucketName}</div>
+                        {access.region && <div className="text-xs text-muted-foreground">{access.region}</div>}
+                      </div>
+                    </div>
+                    <Badge variant="outline">
+                      {access.expiresAt ? `expires ${formatDistanceToNow(parseISO(access.expiresAt), { addSuffix: true })}` : 'Never'}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+    );
+  }
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -80,53 +151,7 @@ export function UserAccessDetailsDialog({ user, onOpenChange }: UserAccessDetail
         </DialogHeader>
         
         <div className="flex-1 overflow-y-auto -mr-6 pr-6">
-          {isLoading ? (
-            <div className="flex justify-center items-center h-48">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
-          ) : !permissions || (!permissions.permanent.length && !permissions.temporary.length) ? (
-            <div className="text-center text-muted-foreground py-10">
-              This user has no assigned permissions.
-            </div>
-          ) : (
-            <div className="space-y-6 py-2">
-              {permissions.permanent.length > 0 && (
-                <div>
-                  <h3 className="font-semibold flex items-center gap-2 mb-2"><ShieldCheck className="h-4 w-4 text-green-500" /> Permanent Access</h3>
-                  <div className="space-y-2 p-3 border rounded-lg">
-                    {permissions.permanent.map(bucketName => (
-                      <div key={bucketName} className="flex items-center gap-2 text-sm">
-                        <HardDrive className="h-4 w-4 text-muted-foreground" />
-                        <span className="font-medium">{bucketName}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {permissions.temporary.length > 0 && (
-                <div>
-                  <h3 className="font-semibold flex items-center gap-2 mb-2"><Timer className="h-4 w-4 text-orange-500" /> Temporary Access</h3>
-                  <div className="space-y-2 p-3 border rounded-lg">
-                    {permissions.temporary.map(access => (
-                      <div key={access.bucketName} className="flex items-center justify-between text-sm">
-                        <div className="flex items-center gap-2">
-                          <HardDrive className="h-4 w-4 text-muted-foreground" />
-                          <div>
-                            <div className="font-medium">{access.bucketName}</div>
-                            {access.region && <div className="text-xs text-muted-foreground">{access.region}</div>}
-                          </div>
-                        </div>
-                        <Badge variant="outline">
-                          {access.expiresAt ? `expires ${formatDistanceToNow(parseISO(access.expiresAt), { addSuffix: true })}` : 'Never'}
-                        </Badge>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+            {renderContent()}
         </div>
       </DialogContent>
     </Dialog>
