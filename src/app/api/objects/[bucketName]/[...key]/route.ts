@@ -94,7 +94,9 @@ export async function GET(
             if (!Body) {
                 return NextResponse.json({ error: 'File is empty.' }, { status: 404 });
             }
-            const content = await Body.transformToString();
+            // Use transformToByteArray to handle various content types, then decode
+            const byteArray = await Body.transformToByteArray();
+            const content = new TextDecoder().decode(byteArray);
             return new Response(content, { headers: { 'Content-Type': 'text/plain' } });
         }
 
@@ -162,6 +164,9 @@ export async function PUT(
 
     const user = session.user as S3CommanderUser;
     const { bucketName, key: keyParts } = context.params;
+    
+    // This is the critical fix: `keyParts.join('/')` correctly reassembles the path,
+    // including the trailing slash for folders.
     const objectKey = keyParts.join('/');
 
     const hasAccess = await checkWriteAccess(user, bucketName);
@@ -175,11 +180,13 @@ export async function PUT(
         const s3Client = await getS3Client(bucketName);
 
         // Handle folder creation: S3 folders are 0-byte objects with a trailing slash
-        if (contentType === 'application/x-directory') {
+        // We now check if the key ENDS with a slash, which is the definitive way to identify a folder.
+        if (objectKey.endsWith('/')) {
             const command = new PutObjectCommand({ 
                 Bucket: bucketName, 
                 Key: objectKey, // The key must end in a '/'
                 Body: '', // Empty body
+                ContentLength: 0, // Explicitly set content length to 0
             });
             await s3Client.send(command);
             return NextResponse.json({ success: true, message: 'Folder created successfully' });
