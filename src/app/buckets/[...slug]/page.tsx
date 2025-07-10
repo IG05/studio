@@ -1,7 +1,7 @@
 
 "use client";
 
-import { Fragment, useMemo, useState, useEffect } from 'react';
+import { Fragment, useMemo, useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import {
   Table,
@@ -13,10 +13,16 @@ import {
 } from '@/components/ui/table';
 import { Header } from '@/components/header';
 import type { S3Object } from '@/lib/types';
-import { File, Folder, HardDrive, ChevronRight, Loader2, ShieldAlert, Download, Eye, Upload, Trash2, FolderPlus, Search } from 'lucide-react';
+import { File, Folder, HardDrive, ChevronRight, Loader2, ShieldAlert, Download, Eye, Upload, Trash2, FolderPlus, Search, FileUp, FolderUp } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+  } from '@/components/ui/dropdown-menu';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { toast } from '@/hooks/use-toast';
 import { formatBytes } from '@/lib/utils';
@@ -30,18 +36,26 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { CreateFolderDialog } from '@/components/create-folder-dialog';
 import { ViewObjectDialog } from '@/components/view-object-dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
+import { Progress } from '@/components/ui/progress';
+
 
 type InteractingObject = {
     key: string;
     action: 'view' | 'download' | 'delete' | 'upload' | 'create-folder';
 } | null;
+
+type UploadProgress = {
+    fileName: string;
+    totalFiles: number;
+    currentFileNumber: number;
+    overallProgress: number;
+};
 
 const VIEWABLE_EXTENSIONS = ['json', 'txt', 'md', 'csv', 'xml', 'html', 'css', 'js', 'ts', 'log'];
 
@@ -55,11 +69,14 @@ export default function BucketPage() {
   const [error, setError] = useState<string | null>(null);
   const [interactingObject, setInteractingObject] = useState<InteractingObject>(null);
   const [canWrite, setCanWrite] = useState(false);
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [isCreateFolderOpen, setIsCreateFolderOpen] = useState(false);
   const [viewingObject, setViewingObject] = useState<{ bucket: string, key: string } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedObjects, setSelectedObjects] = useState<string[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
   
   const path = useMemo(() => pathParts.join('/'), [pathParts]);
   const currentPrefix = useMemo(() => (path ? path + '/' : ''), [path]);
@@ -220,57 +237,69 @@ export default function BucketPage() {
     }
   };
 
-  const handleUpload = async () => {
-    if (!uploadFile) return;
+  const uploadFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    
+    setUploadProgress({
+        fileName: files[0].name,
+        totalFiles: files.length,
+        currentFileNumber: 1,
+        overallProgress: 0,
+    });
 
-    setInteractingObject({ key: uploadFile.name, action: 'upload' });
-
-    try {
-        const key = `${currentPrefix}${uploadFile.name}`;
-        // Get a presigned URL for upload
-        const presignedRes = await fetch(`/api/objects/${bucketName}/${key}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ contentType: uploadFile.type })
-        });
-
-        if (!presignedRes.ok) {
-            const data = await presignedRes.json();
-            throw new Error(data.error || "Could not get an upload URL.");
-        }
-
-        const { url } = await presignedRes.json();
-
-        // Upload the file directly to S3 using the presigned URL
-        const uploadRes = await fetch(url, {
-            method: 'PUT',
-            body: uploadFile,
-            headers: { 'Content-Type': uploadFile.type },
-        });
-
-        if (!uploadRes.ok) {
-            throw new Error("File upload to S3 failed.");
-        }
-
-        toast({ title: "Upload Successful", description: `File ${uploadFile.name} uploaded.` });
-        setUploadFile(null);
-        // Clear the file input visually
-        const fileInput = document.getElementById('file-upload') as HTMLInputElement;
-        if (fileInput) fileInput.value = '';
+    for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const isFolderUpload = !!(file as any).webkitRelativePath;
+        const key = isFolderUpload ? (file as any).webkitRelativePath : `${currentPrefix}${file.name}`;
         
-        fetchObjects(); // Refresh list
+        setUploadProgress(prev => ({
+            ...prev!,
+            fileName: file.name,
+            currentFileNumber: i + 1,
+            overallProgress: (i / files.length) * 100
+        }));
 
-    } catch (err: any) {
-        console.error("Upload failed", err);
-        toast({
-            title: 'Upload Error',
-            description: err.message || 'Could not upload the file.',
-            variant: 'destructive',
-        });
-    } finally {
-        setInteractingObject(null);
+        try {
+            // Get presigned URL
+            const presignedRes = await fetch(`/api/objects/${bucketName}/${key}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ contentType: file.type || 'application/octet-stream' }),
+            });
+            if (!presignedRes.ok) {
+                const data = await presignedRes.json();
+                throw new Error(data.error || `Could not get upload URL for ${file.name}.`);
+            }
+            const { url } = await presignedRes.json();
+
+            // Upload to S3
+            const uploadRes = await fetch(url, {
+                method: 'PUT',
+                body: file,
+                headers: { 'Content-Type': file.type || 'application/octet-stream' },
+            });
+            if (!uploadRes.ok) {
+                throw new Error(`Upload failed for ${file.name}.`);
+            }
+        } catch (err: any) {
+            console.error(err);
+            toast({ title: 'Upload Error', description: err.message, variant: 'destructive' });
+            // Stop on first error
+            setUploadProgress(null);
+            return;
+        }
     }
+    
+    setUploadProgress(null);
+    toast({ title: "Upload Complete", description: `${files.length} file(s) uploaded successfully.` });
+    
+    // Reset file inputs
+    if(fileInputRef.current) fileInputRef.current.value = "";
+    if(folderInputRef.current) folderInputRef.current.value = "";
+
+    fetchObjects();
   };
+
 
   const handleCreateFolder = async (folderName: string) => {
     const key = `${currentPrefix}${folderName}/`;
@@ -279,8 +308,6 @@ export default function BucketPage() {
     try {
       const res = await fetch(`/api/objects/${bucketName}/${key}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contentType: 'application/x-directory' })
       });
       if (!res.ok) {
         const error = await res.json();
@@ -351,15 +378,25 @@ export default function BucketPage() {
             {canWrite && (
               <div className="flex items-center gap-2">
                 <Button onClick={() => setIsCreateFolderOpen(true)} variant="outline">
-                    <FolderPlus className="w-4 h-4 mr-2" /> Create Folder
+                    <FolderPlus className="w-4 h-4 mr-2" /> Create folder
                 </Button>
-                <div className="flex items-center gap-2 border rounded-md p-1">
-                    <Input id="file-upload" type="file" onChange={(e) => setUploadFile(e.target.files?.[0] || null)} className="flex-1 text-xs h-8 border-none focus-visible:ring-0 focus-visible:ring-offset-0" />
-                    <Button onClick={handleUpload} disabled={!uploadFile || interactingObject?.action === 'upload'}>
-                        {interactingObject?.action === 'upload' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                        <span className="hidden sm:inline ml-2">Upload</span>
-                    </Button>
-                </div>
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="default">
+                            <Upload className="w-4 h-4 mr-2" /> Upload
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                        <DropdownMenuItem onSelect={() => fileInputRef.current?.click()}>
+                            <FileUp className="w-4 h-4 mr-2" /> Upload file
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => folderInputRef.current?.click()}>
+                            <FolderUp className="w-4 h-4 mr-2" /> Upload folder
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+                <input type="file" ref={fileInputRef} className="hidden" multiple onChange={(e) => uploadFiles(e.target.files)} />
+                <input type="file" ref={folderInputRef} className="hidden" webkitdirectory="" directory="" multiple onChange={(e) => uploadFiles(e.target.files)} />
               </div>
             )}
         </div>
@@ -376,6 +413,18 @@ export default function BucketPage() {
             </Alert>
         )}
 
+        {uploadProgress && (
+            <div className="my-4 p-4 border rounded-lg bg-muted">
+                <div className="flex justify-between items-center mb-2">
+                    <p className="text-sm font-medium">
+                        Uploading ({uploadProgress.currentFileNumber}/{uploadProgress.totalFiles}): {uploadProgress.fileName}
+                    </p>
+                    <p className="text-sm text-muted-foreground">{Math.round(uploadProgress.overallProgress)}%</p>
+                </div>
+                <Progress value={uploadProgress.overallProgress} />
+            </div>
+        )}
+
         <div className="my-4 flex flex-col sm:flex-row justify-between items-center gap-4">
             <div className="relative w-full sm:max-w-xs">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -385,7 +434,7 @@ export default function BucketPage() {
                 <div className="flex items-center gap-2">
                     <AlertDialog>
                         <AlertDialogTrigger asChild>
-                            <Button variant="destructive">
+                            <Button variant="destructive" disabled={!!interactingObject}>
                                 <Trash2 className="w-4 h-4 mr-2" />
                                 Delete ({selectedObjects.length})
                             </Button>
