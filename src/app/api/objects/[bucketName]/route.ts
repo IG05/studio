@@ -33,7 +33,7 @@ async function checkWriteAccess(user: S3CommanderUser, bucketName: string): Prom
     }
     
     const hasValidTempPermission = tempPermissions.some(permission => {
-        return !permission.expiresAt || !isAfter(new Date(), permission.expiresAt);
+        return permission.expiresAt && !isAfter(new Date(), new Date(permission.expiresAt));
     });
 
     return hasValidTempPermission;
@@ -100,7 +100,7 @@ export async function GET(
         }));
 
         const files: S3Object[] = (Contents as _Object[])
-            .filter(obj => obj.Key !== command.input.Prefix)
+            .filter(obj => obj.Key !== command.input.Prefix) // Exclude the prefix itself if it's an object (folder placeholder)
             .map(obj => ({
                 key: obj.Key!,
                 type: 'file',

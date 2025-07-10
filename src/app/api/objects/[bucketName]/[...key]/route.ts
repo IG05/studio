@@ -32,7 +32,7 @@ async function checkWriteAccess(user: S3CommanderUser, bucketName: string): Prom
     }
     
     const hasValidTempPermission = tempPermissions.some(permission => {
-        return !permission.expiresAt || !isAfter(new Date(), permission.expiresAt);
+        return permission.expiresAt && !isAfter(new Date(), new Date(permission.expiresAt));
     });
 
     return hasValidTempPermission;
@@ -68,7 +68,7 @@ const getS3Client = async (bucketName: string) => {
 };
 
 
-// GET handler for presigned URLs (download/view)
+// GET handler for presigned URLs (download/view) or raw content for viewer
 export async function GET(
     request: NextRequest,
     context: { params: { bucketName: string; key: string[] } }
@@ -80,26 +80,35 @@ export async function GET(
 
     const { bucketName, key: keyParts } = context.params;
     const objectKey = keyParts.join('/');
+    const { searchParams } = new URL(request.url);
+    const forDownload = searchParams.get('for_download');
+    const forViewer = searchParams.get('for_viewer');
 
     try {
         const s3Client = await getS3Client(bucketName);
+        const command = new GetObjectCommand({ Bucket: bucketName, Key: objectKey });
+        
+        // Return raw content for the in-app viewer
+        if (forViewer === 'true') {
+            const { Body } = await s3Client.send(command);
+            if (!Body) {
+                return NextResponse.json({ error: 'File is empty.' }, { status: 404 });
+            }
+            const content = await Body.transformToString();
+            return new Response(content, { headers: { 'Content-Type': 'text/plain' } });
+        }
 
+        // Return presigned URL for viewing in browser or downloading
         const commandParams: { Bucket: string, Key: string, ResponseContentDisposition?: string } = {
             Bucket: bucketName,
             Key: objectKey,
         };
-
-        const { searchParams } = new URL(request.url);
-        const forDownload = searchParams.get('for_download');
-
         if (forDownload === 'true') {
             const filename = objectKey.split('/').pop() || objectKey;
             commandParams.ResponseContentDisposition = `attachment; filename="${filename}"`;
         }
 
-        const command = new GetObjectCommand(commandParams);
-        const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 60 });
-
+        const signedUrl = await getSignedUrl(s3Client, new GetObjectCommand(commandParams), { expiresIn: 60 });
         return NextResponse.json({ url: signedUrl });
 
     } catch (error: any) {
@@ -141,7 +150,7 @@ export async function DELETE(
     }
 }
 
-// PUT handler for generating presigned upload URLs
+// PUT handler for generating presigned upload URLs and creating folders
 export async function PUT(
     request: NextRequest,
     context: { params: { bucketName: string; key: string[] } }
@@ -167,8 +176,21 @@ export async function PUT(
         if (!contentType) {
              return NextResponse.json({ error: 'Content-Type is required.' }, { status: 400 });
         }
-
+        
         const s3Client = await getS3Client(bucketName);
+
+        // Handle folder creation
+        if (contentType === 'application/x-directory') {
+            const command = new PutObjectCommand({ 
+                Bucket: bucketName, 
+                Key: objectKey,
+                Body: '',
+            });
+            await s3Client.send(command);
+            return NextResponse.json({ success: true, message: 'Folder created successfully' });
+        }
+
+        // Handle file upload (presigned URL generation)
         const command = new PutObjectCommand({ 
             Bucket: bucketName, 
             Key: objectKey,
@@ -178,7 +200,7 @@ export async function PUT(
 
         return NextResponse.json({ url: signedUrl });
     } catch (error: any) {
-        console.error(`Failed to generate signed upload URL for ${objectKey} in bucket ${bucketName}:`, error);
-        return NextResponse.json({ error: 'Failed to create upload link.' }, { status: 500 });
+        console.error(`Failed to process PUT request for ${objectKey} in bucket ${bucketName}:`, error);
+        return NextResponse.json({ error: 'Failed to create resource.' }, { status: 500 });
     }
 }

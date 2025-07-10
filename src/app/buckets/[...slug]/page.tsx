@@ -13,14 +13,13 @@ import {
 } from '@/components/ui/table';
 import { Header } from '@/components/header';
 import type { S3Object } from '@/lib/types';
-import { File, Folder, HardDrive, ChevronRight, Loader2, ShieldAlert, Download, Eye, Upload, Trash2 } from 'lucide-react';
+import { File, Folder, HardDrive, ChevronRight, Loader2, ShieldAlert, Download, Eye, Upload, Trash2, FolderPlus } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { toast } from '@/hooks/use-toast';
 import { formatBytes } from '@/lib/utils';
-import { useSession } from 'next-auth/react';
 import { Input } from '@/components/ui/input';
 import {
   AlertDialog,
@@ -31,17 +30,19 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import { CreateFolderDialog } from '@/components/create-folder-dialog';
+import { ViewObjectDialog } from '@/components/view-object-dialog';
 
 type InteractingObject = {
     key: string;
-    action: 'view' | 'download' | 'delete' | 'upload';
+    action: 'view' | 'download' | 'delete' | 'upload' | 'create-folder';
 } | null;
+
+const VIEWABLE_EXTENSIONS = ['json', 'txt', 'md', 'csv', 'xml', 'html', 'css', 'js', 'ts', 'log'];
 
 export default function BucketPage() {
   const params = useParams();
-  const { data: session } = useSession();
   const slug = (params.slug || []) as string[];
   const [bucketName, ...pathParts] = slug;
   
@@ -51,6 +52,8 @@ export default function BucketPage() {
   const [interactingObject, setInteractingObject] = useState<InteractingObject>(null);
   const [canWrite, setCanWrite] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [isCreateFolderOpen, setIsCreateFolderOpen] = useState(false);
+  const [viewingObject, setViewingObject] = useState<{ bucket: string, key: string } | null>(null);
 
   const path = useMemo(() => pathParts.join('/'), [pathParts]);
   const currentPrefix = useMemo(() => (path ? path + '/' : ''), [path]);
@@ -61,7 +64,7 @@ export default function BucketPage() {
     setIsLoading(true);
     setError(null);
 
-    const pathParam = path ? `?path=${path}/` : '';
+    const pathParam = path ? `?path=${encodeURIComponent(currentPrefix)}` : '';
 
     fetch(`/api/objects/${bucketName}${pathParam}`)
       .then(async (res) => {
@@ -113,17 +116,22 @@ export default function BucketPage() {
   const handleView = async (objectKey: string) => {
     setInteractingObject({ key: objectKey, action: 'view' });
     try {
-      const url = await getSignedUrl(objectKey);
-      window.open(url, '_blank');
+        const fileExtension = objectKey.split('.').pop()?.toLowerCase();
+        if (fileExtension && VIEWABLE_EXTENSIONS.includes(fileExtension)) {
+            setViewingObject({ bucket: bucketName, key: objectKey });
+        } else {
+            const url = await getSignedUrl(objectKey);
+            window.open(url, '_blank');
+        }
     } catch (err: any) {
-      console.error("View failed", err);
-      toast({
-        title: 'View Error',
-        description: err.message || 'Could not view the file.',
-        variant: 'destructive',
-      });
+        console.error("View failed", err);
+        toast({
+            title: 'View Error',
+            description: err.message || 'Could not view the file.',
+            variant: 'destructive',
+        });
     } finally {
-      setInteractingObject(null);
+        setInteractingObject(null);
     }
   };
 
@@ -181,7 +189,7 @@ export default function BucketPage() {
     try {
         const key = `${currentPrefix}${uploadFile.name}`;
         // Get a presigned URL for upload
-        const presignedRes = await fetch(`/api/objects/${bucketName}/${key}?upload=true`, {
+        const presignedRes = await fetch(`/api/objects/${bucketName}/${key}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ contentType: uploadFile.type })
@@ -207,6 +215,10 @@ export default function BucketPage() {
 
         toast({ title: "Upload Successful", description: `File ${uploadFile.name} uploaded.` });
         setUploadFile(null);
+        // Clear the file input visually
+        const fileInput = document.getElementById('file-upload') as HTMLInputElement;
+        if (fileInput) fileInput.value = '';
+        
         fetchObjects(); // Refresh list
 
     } catch (err: any) {
@@ -221,7 +233,46 @@ export default function BucketPage() {
     }
   };
 
+  const handleCreateFolder = async (folderName: string) => {
+    const key = `${currentPrefix}${folderName}/`;
+    setInteractingObject({ key: key, action: 'create-folder'});
+
+    try {
+      const res = await fetch(`/api/objects/${bucketName}/${key}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contentType: 'application/x-directory' }),
+      });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "Could not create folder.");
+      }
+      toast({ title: "Folder Created", description: `Folder "${folderName}" created successfully.` });
+      fetchObjects();
+    } catch (err: any) {
+       console.error("Create folder failed", err);
+        toast({
+            title: 'Create Folder Error',
+            description: err.message || 'Could not create the folder.',
+            variant: 'destructive',
+        });
+    } finally {
+        setInteractingObject(null);
+    }
+  };
+
   return (
+    <>
+    <CreateFolderDialog
+      open={isCreateFolderOpen}
+      onOpenChange={setIsCreateFolderOpen}
+      onCreate={handleCreateFolder}
+      isLoading={interactingObject?.action === 'create-folder'}
+    />
+    <ViewObjectDialog
+        objectInfo={viewingObject}
+        onOpenChange={(isOpen) => !isOpen && setViewingObject(null)}
+    />
     <div className="flex flex-col h-full w-full">
       <Header title="Object Browser" />
       <div className="p-4 md:p-6 flex-1 overflow-y-auto">
@@ -240,18 +291,17 @@ export default function BucketPage() {
         {canWrite && (
             <div className="bg-muted p-4 rounded-lg mb-6 flex flex-col sm:flex-row items-center gap-4">
                 <div className="flex-1">
-                    <label htmlFor="file-upload" className="font-semibold text-foreground">Upload a file</label>
-                    <p className="text-sm text-muted-foreground">Select a file to upload to the current folder.</p>
+                    <label htmlFor="file-upload" className="font-semibold text-foreground">Upload & Create</label>
+                    <p className="text-sm text-muted-foreground">Select a file to upload or create a new folder.</p>
                 </div>
                 <div className="flex items-center gap-2 w-full sm:w-auto">
                     <Input id="file-upload" type="file" onChange={(e) => setUploadFile(e.target.files?.[0] || null)} className="flex-1" />
                     <Button onClick={handleUpload} disabled={!uploadFile || interactingObject?.action === 'upload'}>
-                        {interactingObject?.action === 'upload' ? (
-                             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        ) : (
-                            <Upload className="w-4 h-4 mr-2" />
-                        )}
+                        {interactingObject?.action === 'upload' ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
                         Upload
+                    </Button>
+                     <Button onClick={() => setIsCreateFolderOpen(true)} variant="outline">
+                        <FolderPlus className="w-4 h-4 mr-2" /> Create Folder
                     </Button>
                 </div>
             </div>
@@ -311,13 +361,14 @@ export default function BucketPage() {
                             : '#'
                         }
                         className="flex items-center gap-3 group"
+                        onClick={(e) => { if (obj.type === 'file') e.preventDefault(); }}
                       >
                         {obj.type === 'folder' ? (
                           <Folder className="w-5 h-5 text-primary" />
                         ) : (
                           <File className="w-5 h-5 text-muted-foreground" />
                         )}
-                        <span className="group-hover:underline">{displayName}</span>
+                        <span className={cn(obj.type === 'folder' && "group-hover:underline")}>{displayName}</span>
                       </Link>
                     </TableCell>
                     <TableCell>{obj.size ? formatBytes(obj.size) : '--'}</TableCell>
@@ -377,5 +428,6 @@ export default function BucketPage() {
         </div>}
       </div>
     </div>
+    </>
   );
 }
