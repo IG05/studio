@@ -171,23 +171,29 @@ export async function PUT(
         return NextResponse.json({ error: 'Forbidden: Write access required.' }, { status: 403 });
     }
     
-    try {
-        const s3Client = await getS3Client(bucketName);
-        const body = await request.json();
+    const s3Client = await getS3Client(bucketName);
 
-        // If isFolder is true, it's a folder creation request.
-        if (body.isFolder === true) {
+    // If key ends with '/', it's a folder creation request.
+    // This request comes from the client with an empty body.
+    if (objectKey.endsWith('/')) {
+        try {
             const command = new PutObjectCommand({ 
                 Bucket: bucketName, 
                 Key: objectKey, 
                 Body: '', // Zero-byte body for folder creation
-                ContentType: 'application/x-directory',
             });
             await s3Client.send(command);
             return NextResponse.json({ success: true, message: 'Folder created successfully' });
-        } else {
-            // Otherwise, it's a file upload request.
+        } catch (error: any) {
+             console.error(`Failed to create folder ${objectKey} in bucket ${bucketName}:`, error);
+             return NextResponse.json({ error: 'Failed to create folder.' }, { status: 500 });
+        }
+    } else {
+        // Otherwise, it's a file upload request, which requires a JSON body with contentType.
+        try {
+            const body = await request.json();
             const contentType = body.contentType;
+
             if (!contentType) {
                 return NextResponse.json({ error: 'Content-Type is required for file uploads.' }, { status: 400 });
             }
@@ -200,12 +206,13 @@ export async function PUT(
             const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 300 }); // 5 minute expiry
 
             return NextResponse.json({ url: signedUrl });
+        } catch (error: any) {
+            console.error(`Failed to process presigned URL for ${objectKey} in bucket ${bucketName}:`, error);
+            // This catches JSON parsing errors for empty bodies, among other things.
+            if (error instanceof SyntaxError) {
+                 return NextResponse.json({ error: 'Invalid request body. For file uploads, a JSON body with contentType is required.' }, { status: 400 });
+            }
+            return NextResponse.json({ error: 'Failed to create presigned URL.' }, { status: 500 });
         }
-    } catch (error: any) {
-        console.error(`Failed to process PUT request for ${objectKey} in bucket ${bucketName}:`, error);
-        if (error instanceof SyntaxError) {
-             return NextResponse.json({ error: 'Invalid request body. For file uploads, a JSON body with contentType is required.' }, { status: 400 });
-        }
-        return NextResponse.json({ error: 'Failed to create resource.' }, { status: 500 });
     }
 }
