@@ -175,7 +175,6 @@ export async function PUT(
         const s3Client = await getS3Client(bucketName);
 
         // Handle folder creation: S3 folders are 0-byte objects with a trailing slash.
-        // The key must end with a '/' for this to be a folder.
         if (objectKey.endsWith('/')) {
             const command = new PutObjectCommand({ 
                 Bucket: bucketName, 
@@ -206,9 +205,10 @@ export async function PUT(
         return NextResponse.json({ url: signedUrl });
     } catch (error: any) {
         console.error(`Failed to process PUT request for ${objectKey} in bucket ${bucketName}:`, error);
-        // Check if error is from request.json() failing
-        if (error instanceof SyntaxError && objectKey.endsWith('/')) {
-             return NextResponse.json({ error: 'The request to create a folder should not contain a body.' }, { status: 400 });
+        // This error check is important. If request.json() fails, it throws a SyntaxError.
+        // We can catch it to provide a better error message if we expect a body but don't get one.
+        if (error instanceof SyntaxError) {
+             return NextResponse.json({ error: 'Invalid request body. For file uploads, a JSON body with contentType is required.' }, { status: 400 });
         }
         return NextResponse.json({ error: 'Failed to create resource.' }, { status: 500 });
     }
