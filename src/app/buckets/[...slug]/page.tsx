@@ -309,7 +309,10 @@ export default function BucketPage() {
     try {
       const res = await fetch(`/api/objects/${bucketName}/${key}`, {
         method: 'PUT',
-        body: '', // Empty body for folder creation
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ isFolder: true }),
       });
       if (!res.ok) {
         const error = await res.json();
@@ -560,5 +563,3 @@ export default function BucketPage() {
     </>
   );
 }
-
-    

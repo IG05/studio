@@ -173,40 +173,39 @@ export async function PUT(
     
     try {
         const s3Client = await getS3Client(bucketName);
-        
-        // If the key ends with a '/', it's a folder creation request.
-        if (objectKey.endsWith('/')) {
+        const body = await request.json();
+
+        // If isFolder is true, it's a folder creation request.
+        if (body.isFolder === true) {
             const command = new PutObjectCommand({ 
                 Bucket: bucketName, 
                 Key: objectKey, 
                 Body: '', // Zero-byte body for folder creation
+                ContentType: 'application/x-directory',
             });
             await s3Client.send(command);
             return NextResponse.json({ success: true, message: 'Folder created successfully' });
         } else {
-            // Otherwise, it's a file upload request. Now we can safely parse the body.
-            try {
-                const body = await request.json();
-                const contentType = body.contentType;
-
-                if (!contentType) {
-                    return NextResponse.json({ error: 'Content-Type is required for file uploads.' }, { status: 400 });
-                }
-
-                const command = new PutObjectCommand({ 
-                    Bucket: bucketName, 
-                    Key: objectKey,
-                    ContentType: contentType,
-                });
-                const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 300 }); // 5 minute expiry
-
-                return NextResponse.json({ url: signedUrl });
-            } catch (error) {
-                 return NextResponse.json({ error: 'Invalid request body. For file uploads, a JSON body with contentType is required.' }, { status: 400 });
+            // Otherwise, it's a file upload request.
+            const contentType = body.contentType;
+            if (!contentType) {
+                return NextResponse.json({ error: 'Content-Type is required for file uploads.' }, { status: 400 });
             }
+
+            const command = new PutObjectCommand({ 
+                Bucket: bucketName, 
+                Key: objectKey,
+                ContentType: contentType,
+            });
+            const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 300 }); // 5 minute expiry
+
+            return NextResponse.json({ url: signedUrl });
         }
     } catch (error: any) {
         console.error(`Failed to process PUT request for ${objectKey} in bucket ${bucketName}:`, error);
+        if (error instanceof SyntaxError) {
+             return NextResponse.json({ error: 'Invalid request body. For file uploads, a JSON body with contentType is required.' }, { status: 400 });
+        }
         return NextResponse.json({ error: 'Failed to create resource.' }, { status: 500 });
     }
 }
