@@ -5,19 +5,22 @@ import * as React from 'react';
 import { useSession } from 'next-auth/react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
-import { Bot, User, MessageSquare, BrainCircuit, RefreshCw } from 'lucide-react';
+import { Bot, User, RefreshCw } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { ScrollArea } from './ui/scroll-area';
-import { cn } from '@/lib/utils';
 
 type Message = {
   id: number;
-  type: 'bot' | 'human' | 'options';
-  text?: string;
-  options?: { text: string; answer: string }[];
+  type: 'bot' | 'human';
+  text: string;
 };
 
-const KNOWLEDGE_BASE = {
+type Question = {
+  text: string;
+  answer: string;
+};
+
+const KNOWLEDGE_BASE: { general: Question[]; user: Question[]; admin: Question[] } = {
   general: [
     {
       text: 'What is S3 Commander?',
@@ -25,21 +28,20 @@ const KNOWLEDGE_BASE = {
     },
     {
       text: 'What do the access levels mean?',
-      answer: `- **Read-Only:** You can view bucket contents and download files.\n- **Read/Write:** You can browse, download, upload, create folders, and modify files. This can be permanent or temporary.\n- **Delete Permission:** This is a separate, permanent permission that allows you to delete files and folders, but only in buckets where you also have Write access.`
+      answer: `There are a few permission types:
+- **Read-Only:** You can view bucket contents and download files. This is the default access level for all visible buckets.
+- **Read/Write:** You can browse, download, upload, and create folders. This can be temporary (via an approved request) or permanent (granted by an admin).
+- **Delete Permission:** This is a separate, permanent permission that allows you to delete files and folders, but only in buckets where you also have Write access.`
     }
   ],
   user: [
     {
-      text: 'How do I get write access?',
+      text: 'How do I get write access to a bucket?',
       answer: 'On the main Dashboard, find a bucket where you have "Read-Only" access and click the "Request Write" button. Fill out the form explaining why you need access and for how long. An administrator will then review your request.'
     },
     {
-      text: 'How do I upload or delete files?',
-      answer: 'First, browse to a bucket where you have "Read/Write" access. Use the "Upload" and "Create folder" buttons at the top of the file list. To delete, you must have the specific "Delete" permission granted by an admin. If you do, the trash can icon will be enabled on files and folders.'
-    },
-    {
       text: 'Where can I see my requests and activity?',
-      answer: 'Click on "My Activity" in the sidebar. This page has tabs for your pending requests, your full request history, and a log of all your file uploads, downloads, and deletions.'
+      answer: 'Click on "My Activity" in the sidebar. This page has tabs for your pending requests, your full request history (approved, denied, revoked), and a log of all your file uploads, downloads, and deletions.'
     },
   ],
   admin: [
@@ -53,7 +55,7 @@ const KNOWLEDGE_BASE = {
     },
     {
       text: 'How do I use the audit logs?',
-      answer: 'The "Access Logs" tab on the Admin Dashboard contains a complete audit trail. Use the "+ Add Filter" button to filter by event type, user, and date. You can also use the search bar to find logs by keywords like a bucket name, user email, or reason.'
+      answer: 'The "Access Logs" tab on the Admin Dashboard contains a complete audit trail. Use the "+ Add Filter" button to filter by event type, user, and date range. Then click "Apply" to see the results. You can also use the search bar to find logs by keywords like a bucket name, user email, or reason.'
     },
     {
       text: 'How do I change a user\'s role?',
@@ -69,39 +71,44 @@ export function HelpWidget() {
 
   const isAdmin = session?.user?.role === 'admin' || session?.user?.role === 'owner';
   
-  const getInitialMessage = (): Message => ({
-    id: 1,
-    type: 'options',
-    text: "Hello! I'm the S3 Commander assistant. Please select a topic below.",
-    options: [
-        ...KNOWLEDGE_BASE.general,
-        ...KNOWLEDGE_BASE.user,
-        ...(isAdmin ? KNOWLEDGE_BASE.admin : []),
-    ]
-  });
+  const getInitialMessages = (): Message[] => [
+    {
+      id: 1,
+      type: 'bot',
+      text: "Hello! I'm the S3 Commander assistant. Please select a topic below.",
+    }
+  ];
 
-  const [messages, setMessages] = React.useState<Message[]>([getInitialMessage()]);
+  const [messages, setMessages] = React.useState<Message[]>(getInitialMessages());
 
-  const handleOptionClick = (option: { text: string; answer: string }) => {
+  const handleOptionClick = (option: Question) => {
     setMessages(prev => [
-      ...prev.filter(m => m.type !== 'options'), // Remove old options
+      ...prev,
       { id: Date.now(), type: 'human', text: option.text },
       { id: Date.now() + 1, type: 'bot', text: option.answer },
-      getInitialMessage(), // Add new options
     ]);
   };
 
   const handleRestart = () => {
-    setMessages([getInitialMessage()]);
+    setMessages(getInitialMessages());
   };
-
+  
   React.useEffect(() => {
     if (scrollAreaRef.current) {
-      scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
+      scrollAreaRef.current.scrollTo({
+        top: scrollAreaRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
     }
   }, [messages]);
 
   if (!session) return null;
+
+  const questionOptions = [
+    ...KNOWLEDGE_BASE.general,
+    ...KNOWLEDGE_BASE.user,
+    ...(isAdmin ? KNOWLEDGE_BASE.admin : []),
+  ];
 
   return (
     <Popover>
@@ -129,55 +136,49 @@ export function HelpWidget() {
                     <span className="sr-only">Start Over</span>
                 </Button>
             </div>
-            <ScrollArea className="flex-1" ref={scrollAreaRef}>
-              <div className="p-4 space-y-4">
-                {messages.map((message) => (
-                  <div key={message.id}>
-                    {message.type === 'bot' && (
-                       <div className="flex items-start gap-3">
-                         <Avatar className="h-8 w-8 border">
-                            <AvatarFallback><Bot className="h-5 w-5" /></AvatarFallback>
-                         </Avatar>
-                         <div className="p-3 rounded-lg bg-muted text-sm whitespace-pre-wrap font-sans">{message.text}</div>
-                       </div>
-                    )}
-                     {message.type === 'human' && (
-                       <div className="flex items-start gap-3 justify-end">
-                         <div className="p-3 rounded-lg bg-primary text-primary-foreground text-sm">{message.text}</div>
-                         <Avatar className="h-8 w-8">
-                            <AvatarImage src={session.user.image || ''} />
-                            <AvatarFallback><User className="h-5 w-5" /></AvatarFallback>
-                         </Avatar>
-                       </div>
-                    )}
-                    {message.type === 'options' && (
-                      <>
-                        {message.text && (
-                           <div className="flex items-start gap-3">
+            <div className="flex-1 overflow-hidden">
+                <ScrollArea className="h-full" ref={scrollAreaRef}>
+                <div className="p-4 space-y-4">
+                    {messages.map((message) => (
+                    <div key={message.id}>
+                        {message.type === 'bot' && (
+                        <div className="flex items-start gap-3">
                             <Avatar className="h-8 w-8 border">
                                 <AvatarFallback><Bot className="h-5 w-5" /></AvatarFallback>
                             </Avatar>
-                            <div className="p-3 rounded-lg bg-muted text-sm">{message.text}</div>
-                          </div>
-                        )}
-                        <div className="flex flex-col items-end gap-2 pt-2">
-                            {message.options?.map((option, index) => (
-                                <Button
-                                    key={index}
-                                    variant="outline"
-                                    className="w-full justify-start h-auto py-2"
-                                    onClick={() => handleOptionClick(option)}
-                                >
-                                    {option.text}
-                                </Button>
-                            ))}
+                            <div className="p-3 rounded-lg bg-muted text-sm whitespace-pre-wrap font-sans">{message.text}</div>
                         </div>
-                      </>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </ScrollArea>
+                        )}
+                        {message.type === 'human' && (
+                        <div className="flex items-start gap-3 justify-end">
+                            <div className="p-3 rounded-lg bg-primary text-primary-foreground text-sm">{message.text}</div>
+                            <Avatar className="h-8 w-8">
+                                <AvatarImage src={session.user.image || ''} />
+                                <AvatarFallback><User className="h-5 w-5" /></AvatarFallback>
+                            </Avatar>
+                        </div>
+                        )}
+                    </div>
+                    ))}
+                </div>
+                </ScrollArea>
+            </div>
+            <div className="p-3 border-t">
+                <ScrollArea className="h-32">
+                    <div className="flex flex-col items-end gap-2 pr-2">
+                        {questionOptions.map((option, index) => (
+                            <Button
+                                key={index}
+                                variant="outline"
+                                className="w-full justify-start h-auto py-2"
+                                onClick={() => handleOptionClick(option)}
+                            >
+                                {option.text}
+                            </Button>
+                        ))}
+                    </div>
+                </ScrollArea>
+            </div>
         </div>
       </PopoverContent>
     </Popover>
