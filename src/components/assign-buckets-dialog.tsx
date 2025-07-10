@@ -19,7 +19,7 @@ import { toast } from '@/hooks/use-toast';
 import type { AppUser, Bucket, Region, UserPermissions } from '@/lib/types';
 import { Loader2, ShieldCheck, Search, HardDrive, Trash2, Edit } from 'lucide-react';
 import { ScrollArea } from './ui/scroll-area';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from './ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from './ui/form';
 import { Textarea } from './ui/textarea';
 import { Input } from './ui/input';
 import {
@@ -79,7 +79,8 @@ export function AssignBucketsDialog({ user, onOpenChange, onPermissionsChanged }
     defaultValues: defaultValues,
   });
   
-  const writeAccessType = form.watch('write.access');
+  const isWriteEnabled = form.watch('write.access') !== 'none';
+  const writeSelectionType = form.watch('write.access');
 
   useEffect(() => {
     if (isOpen && user) {
@@ -169,103 +170,105 @@ export function AssignBucketsDialog({ user, onOpenChange, onPermissionsChanged }
                 <form id="assign-permissions-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 px-6">
                     {/* WRITE PERMISSIONS */}
                     <div className="space-y-4 p-4 border rounded-lg">
-                        <div className="flex items-center gap-2">
-                           <Edit className="h-5 w-5 text-primary" />
-                           <h3 className="text-lg font-semibold">Write Access</h3>
-                        </div>
-                        <FormField
-                            control={form.control}
-                            name="write.access"
-                            render={({ field }) => (
-                                <RadioGroup onValueChange={field.onChange} value={field.value} className="grid grid-cols-3 gap-4">
-                                    <Label className="flex flex-col items-center justify-center rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground [&:has([data-state=checked])]:border-primary">
-                                        <RadioGroupItem value="none" className="sr-only" />
-                                        <p className="font-bold">None</p>
-                                        <p className="text-xs text-muted-foreground">No write access.</p>
-                                    </Label>
-                                    <Label className="flex flex-col items-center justify-center rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground [&:has([data-state=checked])]:border-primary">
-                                        <RadioGroupItem value="all" className="sr-only" />
-                                        <p className="font-bold">All Buckets</p>
-                                        <p className="text-xs text-muted-foreground">Access to all.</p>
-                                    </Label>
-                                    <Label className="flex flex-col items-center justify-center rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground [&:has([data-state=checked])]:border-primary">
-                                        <RadioGroupItem value="selective" className="sr-only" />
-                                        <p className="font-bold">Selective</p>
-                                        <p className="text-xs text-muted-foreground">Choose specific.</p>
-                                    </Label>
-                                </RadioGroup>
-                            )}
-                        />
-
-                        <div className={cn("space-y-4 transition-opacity duration-300", writeAccessType === 'selective' ? 'opacity-100' : 'opacity-50 pointer-events-none')}>
-                            <div className="flex flex-col sm:flex-row gap-2">
-                                <div className="relative flex-1">
-                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                    <Input placeholder="Search buckets..." className="pl-9" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} disabled={writeAccessType !== 'selective'} />
-                                </div>
-                                <Select value={selectedRegion} onValueChange={setSelectedRegion} disabled={writeAccessType !== 'selective'}>
-                                    <SelectTrigger className="w-full sm:w-[200px]"><SelectValue placeholder="Filter by region" /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Regions</SelectItem>
-                                        {regions.map(region => (<SelectItem key={region.id} value={region.id}>{region.name}</SelectItem>))}
-                                    </SelectContent>
-                                </Select>
+                        <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                                <h3 className="text-lg font-semibold flex items-center gap-2"><Edit className="h-5 w-5 text-primary" /> Write Access</h3>
+                                <p className="text-sm text-muted-foreground">Allow user to upload and modify files.</p>
                             </div>
+                            <Switch
+                                checked={isWriteEnabled}
+                                onCheckedChange={(checked) => {
+                                    form.setValue('write.access', checked ? 'all' : 'none', { shouldValidate: true });
+                                }}
+                            />
+                        </div>
 
-                            <Controller
+                        <div className={cn("space-y-4 pt-4 border-t transition-all duration-300", isWriteEnabled ? 'opacity-100' : 'opacity-0 pointer-events-none h-0 overflow-hidden')}>
+                             <FormField
                                 control={form.control}
-                                name="write.buckets"
+                                name="write.access"
                                 render={({ field }) => (
-                                    <>
-                                        <ScrollArea className="h-48 border rounded-md">
-                                            <div className="p-2">
-                                                {filteredAndSortedBuckets.length > 0 ? (
-                                                    <div className="space-y-1">
-                                                        {filteredAndSortedBuckets.map(bucket => (
-                                                            <Label key={bucket.name} className="flex cursor-pointer items-center space-x-3 rounded-md p-2 font-normal hover:bg-accent has-[input:checked]:bg-accent">
-                                                                <Checkbox
-                                                                    checked={field.value?.includes(bucket.name)}
-                                                                    onCheckedChange={(checked) => {
-                                                                        const newValue = checked
-                                                                            ? [...field.value, bucket.name]
-                                                                            : field.value?.filter((value) => value !== bucket.name);
-                                                                        field.onChange(newValue);
-                                                                    }}
-                                                                    disabled={writeAccessType !== 'selective'}
-                                                                />
-                                                                <HardDrive className="h-4 w-4 text-muted-foreground" />
-                                                                <div className="flex flex-col">
-                                                                    <span className="font-medium leading-none">{bucket.name}</span>
-                                                                    <span className="text-xs text-muted-foreground">{bucket.region}</span>
-                                                                </div>
-                                                            </Label>
-                                                        ))}
-                                                    </div>
-                                                ) : (
-                                                    <div className="flex h-full items-center justify-center p-8 text-center text-sm text-muted-foreground">No buckets match your filters.</div>
-                                                )}
-                                            </div>
-                                        </ScrollArea>
-                                         <FormMessage>{form.formState.errors.write?.buckets?.message}</FormMessage>
-                                    </>
+                                    <RadioGroup onValueChange={field.onChange} value={field.value} className="grid grid-cols-2 gap-4">
+                                        <Label className="flex flex-col items-center justify-center rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground [&:has([data-state=checked])]:border-primary">
+                                            <RadioGroupItem value="all" className="sr-only" />
+                                            <p className="font-bold">All Buckets</p>
+                                            <p className="text-xs text-muted-foreground">Access to all current and future buckets.</p>
+                                        </Label>
+                                        <Label className="flex flex-col items-center justify-center rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground [&:has([data-state=checked])]:border-primary">
+                                            <RadioGroupItem value="selective" className="sr-only" />
+                                            <p className="font-bold">Selective</p>
+                                            <p className="text-xs text-muted-foreground">Choose specific buckets.</p>
+                                        </Label>
+                                    </RadioGroup>
                                 )}
                             />
+
+                            <div className={cn("space-y-4 transition-opacity duration-300", writeSelectionType === 'selective' ? 'opacity-100' : 'opacity-50 pointer-events-none')}>
+                                <div className="flex flex-col sm:flex-row gap-2">
+                                    <div className="relative flex-1">
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                        <Input placeholder="Search buckets..." className="pl-9" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} disabled={writeSelectionType !== 'selective'} />
+                                    </div>
+                                    <Select value={selectedRegion} onValueChange={setSelectedRegion} disabled={writeSelectionType !== 'selective'}>
+                                        <SelectTrigger className="w-full sm:w-[200px]"><SelectValue placeholder="Filter by region" /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All Regions</SelectItem>
+                                            {regions.map(region => (<SelectItem key={region.id} value={region.id}>{region.name}</SelectItem>))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <Controller
+                                    control={form.control}
+                                    name="write.buckets"
+                                    render={({ field }) => (
+                                        <>
+                                            <ScrollArea className="h-48 border rounded-md">
+                                                <div className="p-2">
+                                                    {filteredAndSortedBuckets.length > 0 ? (
+                                                        <div className="space-y-1">
+                                                            {filteredAndSortedBuckets.map(bucket => (
+                                                                <Label key={bucket.name} className="flex cursor-pointer items-center space-x-3 rounded-md p-2 font-normal hover:bg-accent has-[input:checked]:bg-accent">
+                                                                    <Checkbox
+                                                                        checked={field.value?.includes(bucket.name)}
+                                                                        onCheckedChange={(checked) => {
+                                                                            const newValue = checked
+                                                                                ? [...field.value, bucket.name]
+                                                                                : field.value?.filter((value) => value !== bucket.name);
+                                                                            field.onChange(newValue);
+                                                                        }}
+                                                                        disabled={writeSelectionType !== 'selective'}
+                                                                    />
+                                                                    <HardDrive className="h-4 w-4 text-muted-foreground" />
+                                                                    <div className="flex flex-col">
+                                                                        <span className="font-medium leading-none">{bucket.name}</span>
+                                                                        <span className="text-xs text-muted-foreground">{bucket.region}</span>
+                                                                    </div>
+                                                                </Label>
+                                                            ))}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="flex h-full items-center justify-center p-8 text-center text-sm text-muted-foreground">No buckets match your filters.</div>
+                                                    )}
+                                                </div>
+                                            </ScrollArea>
+                                             <FormMessage>{form.formState.errors.write?.buckets?.message}</FormMessage>
+                                        </>
+                                    )}
+                                />
+                            </div>
                         </div>
                     </div>
 
                     {/* DELETE PERMISSIONS */}
                     <div className="space-y-4 p-4 border rounded-lg">
-                        <div className="flex items-center gap-2">
-                           <Trash2 className="h-5 w-5 text-destructive" />
-                           <h3 className="text-lg font-semibold">Delete Permission</h3>
-                        </div>
                         <FormField
                             control={form.control}
                             name="canDelete"
                             render={({ field }) => (
-                                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                                <FormItem className="flex flex-row items-center justify-between">
                                     <div className="space-y-0.5">
-                                        <FormLabel className="text-base">Enable Delete</FormLabel>
+                                        <FormLabel className="text-lg font-semibold flex items-center gap-2"><Trash2 className="h-5 w-5 text-destructive" /> Delete Permission</FormLabel>
                                         <FormDescription>Allow this user to delete objects and folders in buckets where they have write access.</FormDescription>
                                     </div>
                                     <FormControl>
@@ -308,3 +311,5 @@ export function AssignBucketsDialog({ user, onOpenChange, onPermissionsChanged }
     </Dialog>
   );
 }
+
+    
