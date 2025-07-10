@@ -42,6 +42,7 @@ export async function POST(request: NextRequest) {
 
         let successCount = 0;
         const logEntries = [];
+        const totalToProcess = requestsToUpdate.length;
 
         for (const req of requestsToUpdate) {
             const updatePayload: any = { $set: { status } };
@@ -76,13 +77,14 @@ export async function POST(request: NextRequest) {
                         requestId: req._id.toString(),
                         userId: req.userId,
                         userEmail: req.userEmail,
+                        userName: req.userName,
                         bucketName: req.bucketName,
                     },
                     details: {
                         status,
                         reason,
                         isBulk: true,
-                        requestCount: requestsToUpdate.length
+                        requestCount: totalToProcess
                     }
                 });
             }
@@ -94,7 +96,7 @@ export async function POST(request: NextRequest) {
 
         return NextResponse.json({
             successCount,
-            errorCount: requestsToUpdate.length - successCount,
+            errorCount: totalToProcess - successCount,
         });
 
     } catch (error) {
