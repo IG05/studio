@@ -428,10 +428,10 @@ const LogsTable = ({ logs, isLoading, onViewDetails }: { logs: AuditLog[], isLoa
     const renderDetails = (log: AuditLog) => {
         const reasonHtml = log.details.reason ? <div className="text-xs text-muted-foreground">Reason: {log.details.reason}</div> : null;
         const targetUserHtml = <span className="font-semibold">{log.target.userEmail || log.target.userName}</span>;
-        const targetBucketHtml = <span className="font-semibold">{log.target.bucketName}</span>;
         
         switch (log.eventType) {
-            case 'ACCESS_REQUEST_DECISION':
+            case 'ACCESS_REQUEST_DECISION': {
+                const targetBucketHtml = <span className="font-semibold">{log.target.bucketName}</span>;
                 return (
                     <div>
                         <div>
@@ -444,7 +444,9 @@ const LogsTable = ({ logs, isLoading, onViewDetails }: { logs: AuditLog[], isLoa
                         {reasonHtml}
                     </div>
                 );
-            case 'ACCESS_REVOKED':
+            }
+            case 'ACCESS_REVOKED': {
+                const targetBucketHtml = <span className="font-semibold">{log.target.bucketName}</span>;
                  return (
                     <div>
                         <div>
@@ -457,6 +459,7 @@ const LogsTable = ({ logs, isLoading, onViewDetails }: { logs: AuditLog[], isLoa
                         {reasonHtml}
                     </div>
                 );
+            }
             case 'ROLE_CHANGE':
                 return (
                     <div>
@@ -475,8 +478,7 @@ const LogsTable = ({ logs, isLoading, onViewDetails }: { logs: AuditLog[], isLoa
                 return (
                     <div>
                         <div>Updated permanent permissions for {targetUserHtml}.</div>
-                        {log.details.addedBuckets && log.details.addedBuckets.length > 0 && <div className="text-xs text-green-600">Added: {log.details.addedBuckets.join(', ')}</div>}
-                        {log.details.removedBuckets && log.details.removedBuckets.length > 0 && <div className="text-xs text-red-600">Removed: {log.details.removedBuckets.join(', ')}</div>}
+                        {log.details.permissionsChangeSummary && <div className="text-xs text-muted-foreground">{log.details.permissionsChangeSummary}</div>}
                         {reasonHtml}
                     </div>
                 );
@@ -591,7 +593,7 @@ const UsersTable = ({ users, onRoleChange, onAssignBuckets, onUserClick, isLoadi
                                             </>
                                         )}
                                         <DropdownMenuItem onClick={() => onAssignBuckets(user)} disabled={user.role === 'OWNER' || (currentUserRole === 'admin' && user.role === 'ADMIN')}>
-                                            <KeyRound className="mr-2 h-4 w-4" /> Assign Buckets
+                                            <KeyRound className="mr-2 h-4 w-4" /> Assign Permissions
                                         </DropdownMenuItem>
                                     </DropdownMenuContent>
                                 </DropdownMenu>

@@ -5,39 +5,51 @@ import { S3Client, ListObjectsV2Command, GetBucketLocationCommand } from '@aws-s
 import type { _Object, CommonPrefix } from '@aws-sdk/client-s3';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
-import type { S3Object, S3CommanderUser } from '@/lib/types';
+import type { S3Object, S3CommanderUser, UserPermissions } from '@/lib/types';
 import { connectToDatabase } from '@/lib/mongodb';
 import { isAfter } from 'date-fns';
 
-async function checkWriteAccess(user: S3CommanderUser, bucketName: string): Promise<boolean> {
+
+async function checkAccess(user: S3CommanderUser, bucketName: string, permissionType: 'write' | 'delete'): Promise<boolean> {
     if (['admin', 'owner'].includes(user.role)) {
         return true;
     }
     
     const { db } = await connectToDatabase();
 
+    // Check permanent permissions first
     const permDoc = await db.collection('permissions').findOne({ userId: user.id });
-    if (permDoc && permDoc.buckets?.includes(bucketName)) {
-        return true;
-    }
-
-    const tempPermissions = await db.collection('accessRequests').find({
-        userId: user.id,
-        bucketName: bucketName,
-        status: 'approved'
-    }).toArray();
-
-
-    if (tempPermissions.length === 0) {
-        return false;
+    if (permDoc) {
+        const permissions = permDoc as unknown as UserPermissions;
+        if (permissionType === 'delete') {
+            // To delete, user needs both write access to the specific bucket AND the global delete permission
+            const hasWrite = permissions.write?.access === 'all' || (permissions.write?.access === 'selective' && permissions.write.buckets?.includes(bucketName));
+            return hasWrite && !!permissions.canDelete;
+        }
+        if (permissionType === 'write') {
+            if (permissions.write?.access === 'all') return true;
+            if (permissions.write?.access === 'selective' && permissions.write.buckets?.includes(bucketName)) {
+                return true;
+            }
+        }
     }
     
-    const hasValidTempPermission = tempPermissions.some(permission => {
-        return permission.expiresAt && !isAfter(new Date(), new Date(permission.expiresAt));
+    // If checking for delete, and user doesn't have permanent delete, they can't delete via temporary access.
+    if (permissionType === 'delete') {
+        return false;
+    }
+
+    // Check for temporary write access
+    const tempPermission = await db.collection('accessRequests').findOne({
+        userId: user.id,
+        bucketName: bucketName,
+        status: 'approved',
+        expiresAt: { $exists: true, $ne: null, $gt: new Date() }
     });
 
-    return hasValidTempPermission;
+    return !!tempPermission;
 }
+
 
 export async function GET(
     request: NextRequest,
@@ -57,7 +69,8 @@ export async function GET(
     const {bucketName} = await params;
 
     // All visible buckets are readable. Check for write access separately.
-    const hasWriteAccess = await checkWriteAccess(user, bucketName);
+    const hasWriteAccess = await checkAccess(user, bucketName, 'write');
+    const hasDeleteAccess = await checkAccess(user, bucketName, 'delete');
 
     try {
         const s3LocationClient = new S3Client({
@@ -112,6 +125,7 @@ export async function GET(
 
         const response = NextResponse.json(allObjects);
         response.headers.set('X-S3-Commander-Write-Access', String(hasWriteAccess));
+        response.headers.set('X-S3-Commander-Delete-Access', String(hasDeleteAccess));
         return response;
 
     } catch (error: any) {

@@ -5,39 +5,48 @@ import { S3Client, GetObjectCommand, DeleteObjectCommand, PutObjectCommand, GetB
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
-import type { S3CommanderUser } from '@/lib/types';
+import type { S3CommanderUser, UserPermissions } from '@/lib/types';
 import { connectToDatabase } from '@/lib/mongodb';
 import { isAfter } from 'date-fns';
-import { Readable } from 'stream';
 
-async function checkWriteAccess(user: S3CommanderUser, bucketName: string): Promise<boolean> {
+async function checkAccess(user: S3CommanderUser, bucketName: string, permissionType: 'write' | 'delete'): Promise<boolean> {
     if (['admin', 'owner'].includes(user.role)) {
         return true;
     }
     
     const { db } = await connectToDatabase();
 
+    // Check permanent permissions first
     const permDoc = await db.collection('permissions').findOne({ userId: user.id });
-    if (permDoc && permDoc.buckets?.includes(bucketName)) {
-        return true;
-    }
-
-    const tempPermissions = await db.collection('accessRequests').find({
-        userId: user.id,
-        bucketName: bucketName,
-        status: 'approved'
-    }).toArray();
-
-    if (tempPermissions.length === 0) {
-        return false;
+    if (permDoc) {
+        const permissions = permDoc as unknown as UserPermissions;
+        if (permissionType === 'delete') {
+            return !!permissions.canDelete;
+        }
+        if (permissionType === 'write') {
+            if (permissions.write?.access === 'all') return true;
+            if (permissions.write?.access === 'selective' && permissions.write.buckets?.includes(bucketName)) {
+                return true;
+            }
+        }
     }
     
-    const hasValidTempPermission = tempPermissions.some(permission => {
-        return permission.expiresAt && !isAfter(new Date(), new Date(permission.expiresAt));
+    // If checking for delete, and user doesn't have permanent delete, they can't delete.
+    if (permissionType === 'delete') {
+        return false;
+    }
+
+    // Check for temporary write access
+    const tempPermission = await db.collection('accessRequests').findOne({
+        userId: user.id,
+        bucketName: bucketName,
+        status: 'approved',
+        expiresAt: { $exists: true, $ne: null, $gt: new Date() }
     });
 
-    return hasValidTempPermission;
+    return !!tempPermission;
 }
+
 
 const getS3Client = async (bucketName: string) => {
     if (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY || !process.env.AWS_REGION) {
@@ -136,11 +145,13 @@ export async function DELETE(
     const { bucketName } = context.params;
     const objectKey = decodeURIComponent(context.params.key.join('/'));
 
-    const hasAccess = await checkWriteAccess(user, bucketName);
-    if (!hasAccess) {
-        return NextResponse.json({ error: 'Forbidden: Write access required.' }, { status: 403 });
-    }
+    const hasWrite = await checkAccess(user, bucketName, 'write');
+    const hasDelete = await checkAccess(user, bucketName, 'delete');
 
+    if (!hasWrite || !hasDelete) {
+        return NextResponse.json({ error: 'Forbidden: Write and Delete permissions required.' }, { status: 403 });
+    }
+    
     try {
         const s3Client = await getS3Client(bucketName);
         
@@ -193,9 +204,9 @@ export async function PUT(
     const user = session.user as S3CommanderUser;
     const { bucketName } = context.params;
     const objectKey = decodeURIComponent(context.params.key.join('/'));
-
-    const hasAccess = await checkWriteAccess(user, bucketName);
-    if (!hasAccess) {
+    
+    const hasWriteAccess = await checkAccess(user, bucketName, 'write');
+    if (!hasWriteAccess) {
         return NextResponse.json({ error: 'Forbidden: Write access required.' }, { status: 403 });
     }
 
@@ -234,8 +245,8 @@ export async function POST(
     const { bucketName } = context.params;
     const objectKey = decodeURIComponent(context.params.key.join('/'));
 
-    const hasAccess = await checkWriteAccess(user, bucketName);
-    if (!hasAccess) {
+    const hasWriteAccess = await checkAccess(user, bucketName, 'write');
+    if (!hasWriteAccess) {
         return NextResponse.json({ error: 'Forbidden: Write access required.' }, { status: 403 });
     }
     

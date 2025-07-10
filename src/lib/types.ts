@@ -90,7 +90,15 @@ export type AuditLog = {
     reason?: string;
     fromRole?: 'OWNER' | 'ADMIN' | 'USER';
     toRole?: 'OWNER' | 'ADMIN' | 'USER';
-    addedBuckets?: string[];
-    removedBuckets?: string[];
+    // Storing a summary of the permission change for the log
+    permissionsChangeSummary?: string;
   };
+};
+
+export type UserPermissions = {
+  write: {
+    access: 'all' | 'selective' | 'none';
+    buckets: string[];
+  };
+  canDelete: boolean;
 };

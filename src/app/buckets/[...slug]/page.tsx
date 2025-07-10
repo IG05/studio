@@ -36,7 +36,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { CreateFolderDialog } from '@/components/create-folder-dialog';
 import { ViewObjectDialog } from '@/components/view-object-dialog';
@@ -71,6 +70,7 @@ export default function BucketPage() {
   const [error, setError] = useState<string | null>(null);
   const [interactingObject, setInteractingObject] = useState<InteractingObject>(null);
   const [canWrite, setCanWrite] = useState(false);
+  const [canDelete, setCanDelete] = useState(false);
   const [isCreateFolderOpen, setIsCreateFolderOpen] = useState(false);
   const [viewingObject, setViewingObject] = useState<{ bucket: string, key: string } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -98,6 +98,7 @@ export default function BucketPage() {
             throw new Error(data.error || `Server responded with status: ${res.status}`);
         }
         setCanWrite(res.headers.get('X-S3-Commander-Write-Access') === 'true');
+        setCanDelete(res.headers.get('X-S3-Commander-Delete-Access') === 'true');
         return data as S3Object[];
       })
       .then(data => {
@@ -480,7 +481,7 @@ export default function BucketPage() {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input placeholder="Find objects by prefix" className="pl-9" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
             </div>
-            {selectedObjects.length > 0 && canWrite && (
+            {selectedObjects.length > 0 && canDelete && (
                 <div className="flex items-center gap-2">
                     <AlertDialog>
                         <AlertDialogTrigger asChild>
@@ -595,14 +596,14 @@ export default function BucketPage() {
                                 {interactingObject?.key === obj.key && interactingObject.action === 'download' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                             </Button>
                            )}
-                             <AlertDialog>
+                           <AlertDialog>
                                 <AlertDialogTrigger asChild>
                                     <Button
                                         variant="ghost"
                                         size="icon"
                                         title="Delete"
                                         className="text-destructive hover:text-destructive"
-                                        disabled={!canWrite || isInteracting}
+                                        disabled={!canDelete || isInteracting}
                                     >
                                         {interactingObject?.key === obj.key && interactingObject.action === 'delete' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                                     </Button>
