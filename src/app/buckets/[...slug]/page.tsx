@@ -19,7 +19,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { toast } from '@/hooks/use-toast';
-import { formatBytes, cn } from '@/lib/utils';
+import { formatBytes } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import {
   AlertDialog,
@@ -36,6 +36,7 @@ import { CreateFolderDialog } from '@/components/create-folder-dialog';
 import { ViewObjectDialog } from '@/components/view-object-dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
+import { cn } from '@/lib/utils';
 
 type InteractingObject = {
     key: string;
@@ -452,7 +453,7 @@ export default function BucketPage() {
                   const fileType = obj.type === 'file' ? obj.key.split('.').pop() || 'file' : 'Folder';
 
                   return (
-                  <TableRow key={obj.key} data-state={selectedObjects.includes(obj.key) && "selected"}>
+                  <TableRow key={obj.key} data-state={selectedObjects.includes(obj.key) ? "selected" : undefined}>
                     <TableCell>
                       <Checkbox 
                         checked={selectedObjects.includes(obj.key)}
