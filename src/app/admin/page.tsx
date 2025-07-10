@@ -613,8 +613,14 @@ const ActivePermissionsTable = ({ requests, handleRevoke, isLoading }: { request
                     </TableCell>
                     <TableCell><div className="font-medium">{req.bucketName}</div><div className="text-sm text-muted-foreground">{req.region}</div></TableCell>
                     <TableCell>
-                        <div className="font-medium">{format(parseISO(req.expiresAt!), 'PPp')}</div>
-                        <div className="text-sm text-muted-foreground">{formatDistanceToNow(parseISO(req.expiresAt!), { addSuffix: true })}</div>
+                       {req.expiresAt ? (
+                        <>
+                            <div className="font-medium">{format(parseISO(req.expiresAt), 'PPp')}</div>
+                            <div className="text-sm text-muted-foreground">{formatDistanceToNow(parseISO(req.expiresAt), { addSuffix: true })}</div>
+                        </>
+                        ) : (
+                          '--'
+                        )}
                     </TableCell>
                     <TableCell>{req.approvedByUserEmail}</TableCell>
                     <TableCell className="text-right">
