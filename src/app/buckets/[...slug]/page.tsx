@@ -273,12 +273,14 @@ export default function BucketPage() {
   };
 
   const handleCreateFolder = async (folderName: string) => {
-    const key = `${currentPrefix}${folderName}/`; // Ensure the key ends with a slash
+    const key = `${currentPrefix}${folderName}/`;
     setInteractingObject({ key: key, action: 'create-folder'});
 
     try {
       const res = await fetch(`/api/objects/${bucketName}/${key}`, {
         method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contentType: 'application/x-directory' })
       });
       if (!res.ok) {
         const error = await res.json();
