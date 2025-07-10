@@ -9,11 +9,12 @@ import { ResourceGroupsTaggingAPIClient, GetResourcesCommand } from '@aws-sdk/cl
 import { CloudWatchClient, GetMetricDataCommand } from '@aws-sdk/client-cloudwatch';
 import { connectToDatabase } from '@/lib/mongodb';
 import { isAfter } from 'date-fns';
+import type { UserPermissions } from '@/lib/types';
 
-async function getWritePermissions(userId: string): Promise<string[]> {
+async function getWritePermissions(userId: string): Promise<UserPermissions['write']> {
     const { db } = await connectToDatabase();
     const permDoc = await db.collection('permissions').findOne({ userId });
-    return permDoc?.buckets || [];
+    return permDoc?.write || { access: 'none', buckets: [] };
 }
 
 
@@ -133,15 +134,17 @@ export async function GET(request: NextRequest) {
 
             let access: Bucket['access'] = 'read-only';
             let tempAccessExpiresAt: string | undefined = undefined;
-
-            const hasPermanentWrite = permanentWritePermissions.includes(bucketName);
-            const tempWritePermission = tempPermissions.find(p => p.bucketName === bucketName && (!p.expiresAt || !isAfter(new Date(), p.expiresAt)));
+            
+            const hasPermanentWrite = permanentWritePermissions.access === 'all' || 
+                                      (permanentWritePermissions.access === 'selective' && permanentWritePermissions.buckets.includes(bucketName));
+            
+            const tempWritePermission = tempPermissions.find(p => p.bucketName === bucketName && p.expiresAt && !isAfter(new Date(), new Date(p.expiresAt)));
             
             if (isAdminOrOwner || hasPermanentWrite) {
                 access = 'read-write';
             } else if (tempWritePermission) {
                 access = 'read-write';
-                tempAccessExpiresAt = tempWritePermission.expiresAt?.toISOString();
+                tempAccessExpiresAt = tempWritePermission.expiresAt?.toString();
             }
 
             return {
