@@ -79,7 +79,12 @@ export async function GET(
     }
 
     const { bucketName, key: keyParts } = context.params;
-    const objectKey = keyParts.join('/');
+    
+    const pathname = new URL(request.url).pathname;
+    const prefix = `/api/objects/${bucketName}/`;
+    const objectKey = decodeURIComponent(pathname.replace(prefix, ''));
+
+
     const { searchParams } = new URL(request.url);
     const forDownload = searchParams.get('for_download');
     const forViewer = searchParams.get('for_viewer');
@@ -208,7 +213,7 @@ export async function PUT(
             return NextResponse.json({ url: signedUrl });
         } catch (error: any) {
             console.error(`Failed to process presigned URL for ${objectKey} in bucket ${bucketName}:`, error);
-            // This catches JSON parsing errors for empty bodies, among other things.
+            // This catches JSON parsing errors for empty bodies (like folder creation attempts)
             if (error instanceof SyntaxError) {
                  return NextResponse.json({ error: 'Invalid request body. For file uploads, a JSON body with contentType is required.' }, { status: 400 });
             }

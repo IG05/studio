@@ -398,7 +398,7 @@ export default function BucketPage() {
                     </DropdownMenuContent>
                 </DropdownMenu>
                 <input type="file" ref={fileInputRef} className="hidden" multiple onChange={(e) => uploadFiles(e.target.files)} />
-                <input type="file" ref={folderInputRef} className="hidden" multiple directory="" webkitdirectory="" onChange={(e) => uploadFiles(e.target.files)} />
+                <input type="file" ref={folderInputRef} className="hidden" multiple onChange={(e) => uploadFiles(e.target.files)} {...{ webkitdirectory: "true" }} />
               </div>
             )}
         </div>
