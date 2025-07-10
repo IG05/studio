@@ -279,9 +279,6 @@ export default function BucketPage() {
     try {
       const res = await fetch(`/api/objects/${bucketName}/${key}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        // No body is sent for folder creation. The API handler will differentiate based on the key ending with a '/'.
-        body: undefined
       });
       if (!res.ok) {
         const error = await res.json();
