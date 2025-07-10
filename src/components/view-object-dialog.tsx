@@ -28,7 +28,7 @@ export function ViewObjectDialog({ objectInfo, onOpenChange }: ViewObjectDialogP
     if (objectInfo) {
       setIsLoading(true);
       setContent(null);
-      fetch(`/api/objects/${objectInfo.bucket}/${objectInfo.key}?for_viewer=true`)
+      fetch(`/api/objects/${objectInfo.bucket}/${encodeURIComponent(objectInfo.key)}?for_viewer=true`)
         .then(async res => {
           if (!res.ok) {
             const error = await res.json();
