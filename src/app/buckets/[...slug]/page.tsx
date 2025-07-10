@@ -36,6 +36,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { CreateFolderDialog } from '@/components/create-folder-dialog';
 import { ViewObjectDialog } from '@/components/view-object-dialog';
@@ -196,13 +197,13 @@ export default function BucketPage() {
         const data = await res.json();
         throw new Error(data.error || "Failed to delete object.");
       }
-      toast({ title: "Object Deleted", description: `Successfully deleted ${objectKey}` });
+      toast({ title: "Object Deleted", description: `Successfully deleted ${objectKey.endsWith('/') ? 'folder' : 'file'}: ${objectKey}` });
       fetchObjects(); // Refresh the list
     } catch (err: any) {
        console.error("Delete failed", err);
         toast({
             title: 'Delete Error',
-            description: err.message || 'Could not delete the file.',
+            description: err.message || 'Could not delete the object.',
             variant: 'destructive',
         });
     } finally {
@@ -338,7 +339,6 @@ export default function BucketPage() {
       try {
           const res = await fetch(`/api/objects/${bucketName}/${encodeURIComponent(key)}`, {
               method: 'PUT',
-              body: '',
           });
           if (!res.ok) {
               const errorData = await res.json().catch(() => ({error: 'Could not create folder.'}));
@@ -493,7 +493,7 @@ export default function BucketPage() {
                             <AlertDialogHeader>
                                 <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                    This will permanently delete the selected {selectedObjects.length} item(s). This action cannot be undone.
+                                    This will permanently delete the selected {selectedObjects.length} item(s), including all contents of selected folders. This action cannot be undone.
                                 </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
@@ -550,6 +550,7 @@ export default function BucketPage() {
                   if (!displayName) return null;
                   const isInteracting = !!interactingObject;
                   const fileType = obj.type === 'file' ? obj.key.split('.').pop() || 'file' : 'Folder';
+                  const isFolder = obj.type === 'folder';
 
                   return (
                   <TableRow key={obj.key} data-state={selectedObjects.includes(obj.key) ? "selected" : undefined}>
@@ -563,14 +564,14 @@ export default function BucketPage() {
                     <TableCell className="font-medium">
                       <Link
                         href={
-                          obj.type === 'folder'
+                          isFolder
                             ? `/buckets/${bucketName}/${obj.key.slice(0,-1)}`
                             : '#'
                         }
                         className="flex items-center gap-3 group"
-                        onClick={(e) => { if (obj.type === 'file') { e.preventDefault(); handleView(obj.key); } }}
+                        onClick={(e) => { if (!isFolder) { e.preventDefault(); handleView(obj.key); } }}
                       >
-                        {obj.type === 'folder' ? (
+                        {isFolder ? (
                           <Folder className="w-5 h-5 text-primary" />
                         ) : (
                           <File className="w-5 h-5 text-muted-foreground" />
@@ -582,8 +583,8 @@ export default function BucketPage() {
                     <TableCell>{format(parseISO(obj.lastModified), 'PPp')}</TableCell>
                     <TableCell>{obj.size != null ? formatBytes(obj.size) : '--'}</TableCell>
                     <TableCell className="text-right">
-                      {obj.type === 'file' && (
                         <div className="flex justify-end gap-2">
+                           {!isFolder && (
                             <Button
                                 variant="ghost"
                                 size="icon"
@@ -593,6 +594,7 @@ export default function BucketPage() {
                             >
                                 {interactingObject?.key === obj.key && interactingObject.action === 'download' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                             </Button>
+                           )}
                              <AlertDialog>
                                 <AlertDialogTrigger asChild>
                                     <Button
@@ -609,7 +611,9 @@ export default function BucketPage() {
                                 <AlertDialogHeader>
                                     <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                                     <AlertDialogDescription>
-                                        This will permanently delete the file <span className="font-medium text-foreground">{displayName}</span>. This action cannot be undone.
+                                        This will permanently delete the {isFolder ? "folder" : "file"}{" "}
+                                        <span className="font-medium text-foreground">{displayName}</span>.
+                                        {isFolder && " This includes all of its contents."} This action cannot be undone.
                                     </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
@@ -621,7 +625,6 @@ export default function BucketPage() {
                                 </AlertDialogContent>
                             </AlertDialog>
                         </div>
-                      )}
                     </TableCell>
                   </TableRow>
                   );
@@ -635,5 +638,3 @@ export default function BucketPage() {
     </>
   );
 }
-
-    

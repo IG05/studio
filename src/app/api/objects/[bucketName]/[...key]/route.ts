@@ -1,7 +1,7 @@
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { S3Client, GetObjectCommand, DeleteObjectCommand, PutObjectCommand, GetBucketLocationCommand } from '@aws-sdk/client-s3';
+import { S3Client, GetObjectCommand, DeleteObjectCommand, PutObjectCommand, GetBucketLocationCommand, ListObjectsV2Command, DeleteObjectsCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
@@ -122,7 +122,7 @@ export async function GET(
     }
 }
 
-// DELETE handler for objects
+// DELETE handler for objects and folders
 export async function DELETE(
     request: NextRequest,
     context: { params: { bucketName: string; key: string[] } }
@@ -143,13 +143,39 @@ export async function DELETE(
 
     try {
         const s3Client = await getS3Client(bucketName);
-        const command = new DeleteObjectCommand({ Bucket: bucketName, Key: objectKey });
-        await s3Client.send(command);
         
-        return NextResponse.json({ success: true, message: 'Object deleted successfully' });
+        // If key ends with '/', it's a folder deletion request
+        if (objectKey.endsWith('/')) {
+            const listCommand = new ListObjectsV2Command({
+                Bucket: bucketName,
+                Prefix: objectKey,
+            });
+            const listedObjects = await s3Client.send(listCommand);
+
+            if (!listedObjects.Contents || listedObjects.Contents.length === 0) {
+                 // Even if the folder is empty, we might need to delete the placeholder object.
+                const deletePlaceholder = new DeleteObjectCommand({ Bucket: bucketName, Key: objectKey });
+                await s3Client.send(deletePlaceholder);
+                return NextResponse.json({ success: true, message: 'Empty folder deleted successfully' });
+            }
+
+            const deleteParams = {
+                Bucket: bucketName,
+                Delete: { Objects: listedObjects.Contents.map(({ Key }) => ({ Key })) },
+            };
+            
+            await s3Client.send(new DeleteObjectsCommand(deleteParams));
+            
+            return NextResponse.json({ success: true, message: 'Folder and its contents deleted successfully' });
+
+        } else { // It's a single file deletion
+            const command = new DeleteObjectCommand({ Bucket: bucketName, Key: objectKey });
+            await s3Client.send(command);
+            return NextResponse.json({ success: true, message: 'Object deleted successfully' });
+        }
 
     } catch (error: any) {
-        console.error(`Failed to delete object ${objectKey} in bucket ${bucketName}:`, error);
+        console.error(`Failed to delete object/folder ${objectKey} in bucket ${bucketName}:`, error);
         return NextResponse.json({ error: 'Failed to delete object.' }, { status: 500 });
     }
 }
@@ -175,7 +201,7 @@ export async function PUT(
 
     // This route is ONLY for folder creation. It must end with a slash.
     if (!objectKey.endsWith('/')) {
-        return NextResponse.json({ error: 'Invalid request for folder creation.' }, { status: 400 });
+        return NextResponse.json({ error: 'Invalid request for folder creation. Use POST for file uploads.' }, { status: 400 });
     }
 
     try {
