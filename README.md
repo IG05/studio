@@ -11,7 +11,6 @@ It replaces the need for static, long-lived AWS credentials by implementing a ro
 - **Admin Dashboard**: Centralized management of requests, active permissions, and users.
 - **Full Audit Trail**: Every significant action is logged for compliance and security.
 - **S3 Object Browser**: View and download files from accessible buckets via a secure interface.
-- **AI-Powered Assistance**: An integrated help widget provides contextual support.
 
 ## Tech Stack
 
