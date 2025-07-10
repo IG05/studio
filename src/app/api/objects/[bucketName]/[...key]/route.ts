@@ -164,9 +164,6 @@ export async function PUT(
 
     const user = session.user as S3CommanderUser;
     const { bucketName, key: keyParts } = context.params;
-    
-    // This is the critical fix: `keyParts.join('/')` correctly reassembles the path,
-    // including the trailing slash for folders.
     const objectKey = keyParts.join('/');
 
     const hasAccess = await checkWriteAccess(user, bucketName);
@@ -175,24 +172,26 @@ export async function PUT(
     }
     
     try {
-        const body = await request.json();
-        const contentType = body.contentType;
         const s3Client = await getS3Client(bucketName);
 
-        // Handle folder creation: S3 folders are 0-byte objects with a trailing slash
-        // We now check if the key ENDS with a slash, which is the definitive way to identify a folder.
+        // Handle folder creation: S3 folders are 0-byte objects with a trailing slash.
+        // The key must end with a '/' for this to be a folder.
         if (objectKey.endsWith('/')) {
             const command = new PutObjectCommand({ 
                 Bucket: bucketName, 
-                Key: objectKey, // The key must end in a '/'
-                Body: '', // Empty body
-                ContentLength: 0, // Explicitly set content length to 0
+                Key: objectKey, 
+                Body: '',
+                ContentLength: 0,
             });
             await s3Client.send(command);
             return NextResponse.json({ success: true, message: 'Folder created successfully' });
         }
 
-        // Handle file upload (presigned URL generation)
+        // Handle file upload (presigned URL generation).
+        // This requires a JSON body with contentType.
+        const body = await request.json();
+        const contentType = body.contentType;
+
         if (!contentType) {
              return NextResponse.json({ error: 'Content-Type is required for file uploads.' }, { status: 400 });
         }
@@ -207,6 +206,10 @@ export async function PUT(
         return NextResponse.json({ url: signedUrl });
     } catch (error: any) {
         console.error(`Failed to process PUT request for ${objectKey} in bucket ${bucketName}:`, error);
+        // Check if error is from request.json() failing
+        if (error instanceof SyntaxError && objectKey.endsWith('/')) {
+             return NextResponse.json({ error: 'The request to create a folder should not contain a body.' }, { status: 400 });
+        }
         return NextResponse.json({ error: 'Failed to create resource.' }, { status: 500 });
     }
 }
