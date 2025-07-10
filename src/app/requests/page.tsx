@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Header } from '@/components/header';
-import type { AccessRequest } from '@/lib/types';
+import type { AccessRequest, AuditLog } from '@/lib/types';
 import { format, parseISO } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 import {
@@ -22,7 +22,7 @@ import {
     TabsTrigger,
   } from "@/components/ui/tabs";
 import { Skeleton } from '@/components/ui/skeleton';
-import { Info, MoreVertical, Eye } from 'lucide-react';
+import { Info, MoreVertical, Eye, FileCheck, ShieldOff, UserCog, KeyRound, FileUp, FolderPlus, Trash2 } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,36 +31,58 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { RequestDetailsDialog } from '@/components/request-details-dialog';
+import { useSession } from 'next-auth/react';
 
 export default function MyRequestsPage() {
   const [requests, setRequests] = React.useState<AccessRequest[]>([]);
-  const [isLoading, setIsLoading] = React.useState(true);
+  const [logs, setLogs] = React.useState<AuditLog[]>([]);
+  const [isLoadingRequests, setIsLoadingRequests] = React.useState(true);
+  const [isLoadingLogs, setIsLoadingLogs] = React.useState(true);
   const [activeTab, setActiveTab] = React.useState('pending');
   const [viewingRequest, setViewingRequest] = React.useState<AccessRequest | null>(null);
+  const { data: session } = useSession();
+
 
   React.useEffect(() => {
     const fetchRequests = async () => {
-        setIsLoading(true);
+        setIsLoadingRequests(true);
         try {
             const res = await fetch('/api/access-requests');
             const data = await res.json();
-
-            if (!res.ok) {
-                throw new Error(data.error || 'Failed to fetch access requests.');
-            }
-            
+            if (!res.ok) throw new Error(data.error || 'Failed to fetch access requests.');
             setRequests(Array.isArray(data) ? data : []);
         } catch (err: any) {
             console.error("Failed to fetch access requests", err);
             setRequests([]);
             toast({ title: 'Error', description: err.message || 'Could not fetch your access requests.', variant: 'destructive' });
         } finally {
-            setIsLoading(false);
+            setIsLoadingRequests(false);
         }
     };
-
     fetchRequests();
   }, []);
+
+  React.useEffect(() => {
+    if (activeTab === 'activity' && session?.user?.id) {
+        const fetchLogs = async () => {
+            setIsLoadingLogs(true);
+            try {
+                const params = new URLSearchParams({ userId: session.user.id! });
+                const res = await fetch(`/api/audit-logs?${params.toString()}`);
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Failed to fetch activity logs.');
+                setLogs(Array.isArray(data) ? data.filter(log => ['FILE_UPLOAD', 'FOLDER_CREATE', 'OBJECT_DELETE'].includes(log.eventType)) : []);
+            } catch (err: any) {
+                console.error("Failed to fetch logs", err);
+                setLogs([]);
+                toast({ title: 'Error', description: err.message || 'Could not fetch your activity logs.', variant: 'destructive' });
+            } finally {
+                setIsLoadingLogs(false);
+            }
+        };
+        fetchLogs();
+    }
+  }, [activeTab, session?.user?.id]);
 
   const getBadgeVariant = (status: AccessRequest['status']) => {
     switch (status) {
@@ -89,18 +111,22 @@ export default function MyRequestsPage() {
         onOpenChange={(isOpen) => !isOpen && setViewingRequest(null)}
     />
     <div className="flex flex-col h-full w-full">
-      <Header title="My Write Access Requests" />
+      <Header title="My History" />
         <div className="p-4 md:p-6 flex-1 overflow-y-auto">
             <Tabs value={activeTab} onValueChange={setActiveTab}>
                 <TabsList className="mb-4">
                     <TabsTrigger value="pending">Pending</TabsTrigger>
                     <TabsTrigger value="historical">Request History</TabsTrigger>
+                    <TabsTrigger value="activity">My Activity</TabsTrigger>
                 </TabsList>
                 <TabsContent value="pending">
-                    <RequestsTable requests={filteredRequests} getBadgeVariant={getBadgeVariant} isLoading={isLoading} onViewDetails={setViewingRequest} activeTab={activeTab} />
+                    <RequestsTable requests={filteredRequests} getBadgeVariant={getBadgeVariant} isLoading={isLoadingRequests} onViewDetails={setViewingRequest} activeTab={activeTab} />
                 </TabsContent>
                 <TabsContent value="historical">
-                    <RequestsTable requests={filteredRequests} getBadgeVariant={getBadgeVariant} isLoading={isLoading} onViewDetails={setViewingRequest} activeTab={activeTab} />
+                    <RequestsTable requests={filteredRequests} getBadgeVariant={getBadgeVariant} isLoading={isLoadingRequests} onViewDetails={setViewingRequest} activeTab={activeTab} />
+                </TabsContent>
+                 <TabsContent value="activity">
+                    <ActivityLogTable logs={logs} isLoading={isLoadingLogs} />
                 </TabsContent>
             </Tabs>
         </div>
@@ -182,3 +208,63 @@ const RequestsTable = ({ requests, getBadgeVariant, isLoading, onViewDetails, ac
         </Table>
     </div>
 );
+
+
+const ActivityLogTable = ({ logs, isLoading }: { logs: AuditLog[], isLoading: boolean }) => {
+    const renderEventIcon = (type: AuditLog['eventType']) => {
+        switch (type) {
+            case 'FILE_UPLOAD': return <FileUp className="h-5 w-5 text-green-500" />;
+            case 'FOLDER_CREATE': return <FolderPlus className="h-5 w-5 text-green-500" />;
+            case 'OBJECT_DELETE': return <Trash2 className="h-5 w-5 text-red-500" />;
+            default: return null;
+        }
+    };
+
+    const renderDetails = (log: AuditLog) => {
+        switch (log.eventType) {
+            case 'FILE_UPLOAD':
+            case 'FOLDER_CREATE':
+            case 'OBJECT_DELETE':
+                return (
+                    <div>
+                        <span>{log.eventType === 'FILE_UPLOAD' ? 'Uploaded file' : log.eventType === 'FOLDER_CREATE' ? 'Created folder' : 'Deleted object'} </span>
+                        <span className="font-mono text-xs bg-muted px-1 py-0.5 rounded">{log.target.objectKey}</span>
+                        <span> in bucket </span>
+                        <span className="font-semibold">{log.target.bucketName}</span>.
+                    </div>
+                );
+            default:
+                return null;
+        }
+    };
+    
+    return (
+        <div className="border rounded-lg">
+            <Table>
+                <TableHeader>
+                <TableRow>
+                    <TableHead className="w-[50px]">Event</TableHead>
+                    <TableHead>Details</TableHead>
+                    <TableHead>Timestamp</TableHead>
+                </TableRow>
+                </TableHeader>
+                <TableBody>
+                {isLoading ? (
+                    Array.from({ length: 5 }).map((_, i) => (<TableRow key={i}><TableCell colSpan={3}><Skeleton className="h-8 w-full" /></TableCell></TableRow>))
+                ) : logs.length === 0 ? (
+                    <TableRow><TableCell colSpan={3} className="h-24 text-center">You have no file activity history.</TableCell></TableRow>
+                ) : logs.map((log) => (
+                    <TableRow key={log.id}>
+                        <TableCell><div className="flex justify-center">{renderEventIcon(log.eventType)}</div></TableCell>
+                        <TableCell>{renderDetails(log)}</TableCell>
+                        <TableCell>
+                            <div className="font-medium">{format(parseISO(log.timestamp), 'PP')}</div>
+                            <div className="text-sm text-muted-foreground">{format(parseISO(log.timestamp), 'p')}</div>
+                        </TableCell>
+                    </TableRow>
+                ))}
+                </TableBody>
+            </Table>
+        </div>
+    );
+};

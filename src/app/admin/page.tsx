@@ -17,7 +17,7 @@ import { Header } from '@/components/header';
 import type { AccessRequest, AppUser, AuditLog, Bucket } from '@/lib/types';
 import { format, parseISO, formatDistanceToNow, subDays } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
-import { CheckCircle, XCircle, MoreVertical, ShieldCheck, User as UserIcon, Check, KeyRound, Crown, Search, FileCheck, UserCog, Eye, HardDrive, ShieldOff, Slash, UserRoundCheck, FileUp, FolderPlus, Trash2, CalendarIcon, FilterX } from 'lucide-react';
+import { CheckCircle, XCircle, MoreVertical, ShieldCheck, User as UserIcon, Check, KeyRound, Crown, Search, FileCheck, UserCog, Eye, HardDrive, ShieldOff, Slash, UserRoundCheck, FileUp, FolderPlus, Trash2, CalendarIcon, Filter, FilterX, Plus } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -59,6 +59,12 @@ const ALL_EVENT_TYPES: AuditLog['eventType'][] = [
     'OBJECT_DELETE'
 ];
 
+type ActiveFilters = {
+    eventType: boolean;
+    user: boolean;
+    date: boolean;
+}
+
 export default function AdminPage() {
   const { data: session } = useSession();
   const [requests, setRequests] = React.useState<AccessRequest[]>([]);
@@ -82,6 +88,12 @@ export default function AdminPage() {
       from: subDays(new Date(), 30),
       to: new Date()
     } as DateRange | undefined,
+  });
+
+  const [activeLogFilters, setActiveLogFilters] = React.useState<ActiveFilters>({
+    eventType: false,
+    user: false,
+    date: false
   });
 
   const [viewingRequest, setViewingRequest] = React.useState<AccessRequest | null>(null);
@@ -134,16 +146,16 @@ export default function AdminPage() {
     setIsLogsLoading(true);
     try {
       const params = new URLSearchParams();
-      if (logFilters.eventTypes.length > 0) {
+      if (activeLogFilters.eventType && logFilters.eventTypes.length > 0) {
         params.append('eventTypes', logFilters.eventTypes.join(','));
       }
-      if (logFilters.userId) {
+      if (activeLogFilters.user && logFilters.userId) {
         params.append('userId', logFilters.userId);
       }
-      if (logFilters.dateRange?.from) {
+      if (activeLogFilters.date && logFilters.dateRange?.from) {
         params.append('startDate', logFilters.dateRange.from.toISOString());
       }
-      if (logFilters.dateRange?.to) {
+      if (activeLogFilters.date && logFilters.dateRange?.to) {
         params.append('endDate', logFilters.dateRange.to.toISOString());
       }
 
@@ -160,12 +172,15 @@ export default function AdminPage() {
     } finally {
         setIsLogsLoading(false);
     }
-  }, [logFilters]);
+  }, [logFilters, activeLogFilters]);
 
   React.useEffect(() => {
     fetchNonLogData();
-    fetchLogs();
-  }, [fetchNonLogData, fetchLogs]);
+  }, [fetchNonLogData]);
+  
+  React.useEffect(() => {
+      fetchLogs();
+  }, [fetchLogs]);
 
 
   const handleRequest = (requestId: string, status: 'approved' | 'denied' | 'revoked', reason: string) => {
@@ -242,16 +257,13 @@ export default function AdminPage() {
     });
   }
 
-  const handleRoleChange = (user: AppUser, role: 'ADMIN' | 'USER') => {
-    setRoleChangeCandidate({ user, role });
-  };
-
   const handlePermissionsChange = () => {
     fetchNonLogData();
     fetchLogs();
   };
   
   const handleClearFilters = () => {
+    setActiveLogFilters({ eventType: false, user: false, date: false });
     setLogFilters({
       eventTypes: [],
       userId: null,
@@ -275,7 +287,7 @@ export default function AdminPage() {
   const adminCount = React.useMemo(() => users.filter(u => u.role === 'ADMIN' || u.role === 'OWNER').length, [users]);
   const standardUserCount = React.useMemo(() => users.filter(u => u.role === 'USER').length, [users]);
 
-  const isFilterActive = logFilters.eventTypes.length > 0 || !!logFilters.userId;
+  const isAnyLogFilterActive = Object.values(activeLogFilters).some(v => v);
 
   return (
     <>
@@ -313,7 +325,7 @@ export default function AdminPage() {
          user={viewingUserAccess}
          currentUser={session?.user}
          onOpenChange={(isOpen) => !isOpen && setViewingUserAccess(null)}
-         onRoleChange={handleRoleChange}
+         onRoleChange={(user, role) => setRoleChangeCandidate({ user, role })}
        />
       <div className="flex flex-col h-full w-full">
         <Header title="Admin Dashboard" />
@@ -370,11 +382,12 @@ export default function AdminPage() {
                       <UsersTable users={filteredUsers} onAssignBuckets={setPermissionUser} onUserClick={setViewingUserAccess} isLoading={isLoading} />
                   </TabsContent>
                   <TabsContent value="logs" className="mt-4">
-                      <div className="flex flex-col sm:flex-row gap-2 mb-4">
-                        <UserFilter users={users} selectedUser={logFilters.userId} onUserChange={(userId) => setLogFilters(f => ({...f, userId}))} />
-                        <EventTypeFilter selectedTypes={logFilters.eventTypes} onTypeChange={(types) => setLogFilters(f => ({...f, eventTypes: types}))} />
-                        <DateRangeFilter dateRange={logFilters.dateRange} onDateChange={(range) => setLogFilters(f => ({...f, dateRange: range}))} />
-                        {isFilterActive && (
+                      <div className="flex flex-wrap items-center gap-2 mb-4">
+                        <AddFilterMenu onFilterSelect={(filter) => setActiveLogFilters(f => ({...f, [filter]: true}))} />
+                        {activeLogFilters.user && <UserFilter users={users} selectedUser={logFilters.userId} onUserChange={(userId) => setLogFilters(f => ({...f, userId}))} />}
+                        {activeLogFilters.eventType && <EventTypeFilter selectedTypes={logFilters.eventTypes} onTypeChange={(types) => setLogFilters(f => ({...f, eventTypes: types}))} />}
+                        {activeLogFilters.date && <DateRangeFilter dateRange={logFilters.dateRange} onDateChange={(range) => setLogFilters(f => ({...f, dateRange: range}))} />}
+                        {isAnyLogFilterActive && (
                             <Button variant="ghost" onClick={handleClearFilters}>
                                 <FilterX className="mr-2 h-4 w-4" /> Clear
                             </Button>
@@ -654,7 +667,7 @@ const UsersTable = ({ users, onAssignBuckets, onUserClick, isLoading }: { users:
                             <TableCell className="text-right">
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
-                                        <Button variant="ghost" size="icon" disabled={user.role === 'OWNER' || user.id === session?.user?.id || (currentUserRole === 'admin' && user.role === 'ADMIN')}>
+                                        <Button variant="ghost" size="icon" disabled={user.role === 'OWNER' || (currentUserRole === 'admin' && user.role === 'ADMIN')}>
                                             <MoreVertical className="h-5 w-5" />
                                         </Button>
                                     </DropdownMenuTrigger>
@@ -673,6 +686,26 @@ const UsersTable = ({ users, onAssignBuckets, onUserClick, isLoading }: { users:
     )
 };
 
+
+function AddFilterMenu({ onFilterSelect }: { onFilterSelect: (filter: keyof ActiveFilters) => void }) {
+    return (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button variant="outline">
+                    <Plus className="mr-2 h-4 w-4" /> Add Filter
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+                <DropdownMenuLabel>Filter By</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => onFilterSelect('eventType')}>Event Type</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => onFilterSelect('user')}>User</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => onFilterSelect('date')}>Date Range</DropdownMenuItem>
+            </DropdownMenuContent>
+        </DropdownMenu>
+    );
+}
+
 function EventTypeFilter({ selectedTypes, onTypeChange }: { selectedTypes: string[], onTypeChange: (types: string[]) => void }) {
     const eventTypeLabels: Record<string, string> = {
         'ACCESS_REQUEST_DECISION': 'Access Decisions',
@@ -688,6 +721,7 @@ function EventTypeFilter({ selectedTypes, onTypeChange }: { selectedTypes: strin
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
                 <Button variant="outline" className="w-full sm:w-auto">
+                    <Filter className="mr-2 h-4 w-4" />
                     Event Type ({selectedTypes.length > 0 ? selectedTypes.length : 'All'})
                 </Button>
             </DropdownMenuTrigger>
