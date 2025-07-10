@@ -175,7 +175,6 @@ export async function PUT(
         const s3Client = await getS3Client(bucketName);
         
         // If the key ends with a '/', it's a folder creation request.
-        // This is the CRITICAL fix: check for folder before parsing body.
         if (objectKey.endsWith('/')) {
             const command = new PutObjectCommand({ 
                 Bucket: bucketName, 
@@ -203,7 +202,6 @@ export async function PUT(
 
                 return NextResponse.json({ url: signedUrl });
             } catch (error) {
-                 // This catch block will now only trigger for genuine file upload issues.
                  return NextResponse.json({ error: 'Invalid request body. For file uploads, a JSON body with contentType is required.' }, { status: 400 });
             }
         }
