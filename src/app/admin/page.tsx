@@ -88,6 +88,7 @@ export default function AdminPage() {
       from: subDays(new Date(), 30),
       to: new Date()
     } as DateRange | undefined,
+    searchQuery: '',
   });
 
   const [activeLogFilters, setActiveLogFilters] = React.useState<ActiveFilters>({
@@ -157,6 +158,9 @@ export default function AdminPage() {
       }
       if (activeLogFilters.date && logFilters.dateRange?.to) {
         params.append('endDate', logFilters.dateRange.to.toISOString());
+      }
+      if (logFilters.searchQuery) {
+        params.append('searchQuery', logFilters.searchQuery);
       }
 
       const res = await fetch(`/api/audit-logs?${params.toString()}`);
@@ -264,14 +268,15 @@ export default function AdminPage() {
   
   const handleClearFilters = () => {
     setActiveLogFilters({ eventType: false, user: false, date: false });
-    setLogFilters({
+    setLogFilters(f => ({
+      ...f,
       eventTypes: [],
       userId: null,
       dateRange: {
         from: subDays(new Date(), 30),
         to: new Date()
       },
-    });
+    }));
   };
 
   const filteredRequests = requests.filter(req => req.status === 'pending');
@@ -382,16 +387,27 @@ export default function AdminPage() {
                       <UsersTable users={filteredUsers} onAssignBuckets={setPermissionUser} onUserClick={setViewingUserAccess} isLoading={isLoading} />
                   </TabsContent>
                   <TabsContent value="logs" className="mt-4">
-                      <div className="flex flex-wrap items-center gap-2 mb-4">
-                        <AddFilterMenu onFilterSelect={(filter) => setActiveLogFilters(f => ({...f, [filter]: true}))} />
-                        {activeLogFilters.user && <UserFilter users={users} selectedUser={logFilters.userId} onUserChange={(userId) => setLogFilters(f => ({...f, userId}))} />}
-                        {activeLogFilters.eventType && <EventTypeFilter selectedTypes={logFilters.eventTypes} onTypeChange={(types) => setLogFilters(f => ({...f, eventTypes: types}))} />}
-                        {activeLogFilters.date && <DateRangeFilter dateRange={logFilters.dateRange} onDateChange={(range) => setLogFilters(f => ({...f, dateRange: range}))} />}
-                        {isAnyLogFilterActive && (
-                            <Button variant="ghost" onClick={handleClearFilters}>
-                                <FilterX className="mr-2 h-4 w-4" /> Clear
-                            </Button>
-                        )}
+                      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-4">
+                         <div className="flex flex-wrap items-center gap-2">
+                            <AddFilterMenu onFilterSelect={(filter) => setActiveLogFilters(f => ({...f, [filter]: true}))} />
+                            {activeLogFilters.user && <UserFilter users={users} selectedUser={logFilters.userId} onUserChange={(userId) => setLogFilters(f => ({...f, userId}))} />}
+                            {activeLogFilters.eventType && <EventTypeFilter selectedTypes={logFilters.eventTypes} onTypeChange={(types) => setLogFilters(f => ({...f, eventTypes: types}))} />}
+                            {activeLogFilters.date && <DateRangeFilter dateRange={logFilters.dateRange} onDateChange={(range) => setLogFilters(f => ({...f, dateRange: range}))} />}
+                            {isAnyLogFilterActive && (
+                                <Button variant="ghost" onClick={handleClearFilters}>
+                                    <FilterX className="mr-2 h-4 w-4" /> Clear
+                                </Button>
+                            )}
+                          </div>
+                           <div className="relative w-full sm:max-w-xs">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                <Input 
+                                    placeholder="Search logs..." 
+                                    className="pl-9" 
+                                    value={logFilters.searchQuery} 
+                                    onChange={(e) => setLogFilters(f => ({...f, searchQuery: e.target.value}))} 
+                                />
+                            </div>
                       </div>
                       <LogsTable logs={logs} isLoading={isLogsLoading} onViewDetails={handleViewDetails} />
                   </TabsContent>

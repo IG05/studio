@@ -16,11 +16,12 @@ export async function GET(request: NextRequest) {
     const userId = searchParams.get('userId');
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
+    const searchQuery = searchParams.get('searchQuery');
     
     try {
         const { db } = await connectToDatabase();
         
-        const query: any = {};
+        let query: any = {};
         
         if (eventTypesParam) {
             const eventTypes = eventTypesParam.split(',');
@@ -30,7 +31,11 @@ export async function GET(request: NextRequest) {
         }
 
         if (userId) {
-            query['actor.userId'] = userId;
+            // Find logs where the user is either the actor OR the target
+            query.$or = [
+                { 'actor.userId': userId },
+                { 'target.userId': userId }
+            ];
         }
 
         if (startDate || endDate) {
@@ -41,6 +46,22 @@ export async function GET(request: NextRequest) {
             if (endDate) {
                 query.timestamp.$lte = new Date(endDate);
             }
+        }
+        
+        if (searchQuery) {
+            // Note: For this to be efficient, you need a text index in your MongoDB collection.
+            // Example: db.auditLogs.createIndex({ "$**": "text" })
+            // As a fallback, this uses regex which is less performant on large datasets.
+             query.$or = [
+                ...(query.$or || []),
+                { 'actor.email': { $regex: searchQuery, $options: 'i' } },
+                { 'target.userEmail': { $regex: searchQuery, $options: 'i' } },
+                { 'target.userName': { $regex: searchQuery, $options: 'i' } },
+                { 'target.bucketName': { $regex: searchQuery, $options: 'i' } },
+                { 'target.objectKey': { $regex: searchQuery, $options: 'i' } },
+                { 'details.reason': { $regex: searchQuery, $options: 'i' } },
+                { 'details.permissionsChangeSummary': { $regex: searchQuery, $options: 'i' } },
+            ];
         }
         
         const logsCursor = db.collection('auditLogs').find(query).sort({ timestamp: -1 });
