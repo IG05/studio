@@ -19,7 +19,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { toast } from '@/hooks/use-toast';
-import { formatBytes } from '@/lib/utils';
+import { formatBytes, cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import {
   AlertDialog,
@@ -348,8 +348,7 @@ export default function BucketPage() {
                   const displayName = obj.key.substring(currentPrefix.length).replace(/\/$/, '');
                   if (!displayName) return null;
                   const isViewing = interactingObject?.key === obj.key && interactingObject?.action === 'view';
-                  const isDownloading = interactingObject?.key === obj.key && interactingObject?.action === 'download';
-                  const isDeleting = interactingObject?.key === obj.key && interactingObject?.action === 'delete';
+                  const isDownloading = interactingObject?.key === obj.key && interactingObject?.action === 'delete';
                   
                   return (
                   <TableRow key={obj.key}>
