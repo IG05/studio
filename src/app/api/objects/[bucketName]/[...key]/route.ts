@@ -93,14 +93,13 @@ export async function GET(
         
         // Return raw content for the in-app viewer
         if (forViewer === 'true') {
-            const { Body } = await s3Client.send(command);
+            const { Body, ContentType } = await s3Client.send(command);
             if (!Body) {
                 return NextResponse.json({ error: 'File is empty.' }, { status: 404 });
             }
             // Use transformToByteArray to handle various content types, then decode
             const byteArray = await Body.transformToByteArray();
-            const content = new TextDecoder().decode(byteArray);
-            return new Response(content, { headers: { 'Content-Type': 'text/plain' } });
+            return new Response(byteArray, { headers: { 'Content-Type': ContentType || 'application/octet-stream' } });
         }
 
         // Return presigned URL for viewing in browser or downloading
@@ -213,23 +212,25 @@ export async function POST(
     if (!hasAccess) {
         return NextResponse.json({ error: 'Forbidden: Write access required.' }, { status: 403 });
     }
-
-    if (!request.body) {
-        return NextResponse.json({ error: 'Request body is missing.' }, { status: 400 });
-    }
-
+    
     try {
+        const formData = await request.formData();
+        const file = formData.get('file') as File | null;
+
+        if (!file) {
+            return NextResponse.json({ error: 'No file found in the request body.' }, { status: 400 });
+        }
+        
+        const fileBuffer = Buffer.from(await file.arrayBuffer());
+        
         const s3Client = await getS3Client(bucketName);
         
-        const contentType = request.headers.get('content-type');
-        const contentLength = request.headers.get('content-length');
-
         const command = new PutObjectCommand({ 
             Bucket: bucketName, 
             Key: objectKey,
-            Body: request.body as unknown as Readable,
-            ContentType: contentType || undefined,
-            ContentLength: contentLength ? parseInt(contentLength, 10) : undefined,
+            Body: fileBuffer,
+            ContentType: file.type || undefined,
+            ContentLength: file.size,
         });
 
         await s3Client.send(command);

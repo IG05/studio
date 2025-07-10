@@ -257,9 +257,9 @@ export default function BucketPage() {
             } else {
                 try {
                     const error = JSON.parse(xhr.responseText);
-                    reject(new Error(error.error || `Upload failed with status: ${xhr.status} ${xhr.statusText}`));
+                    reject(new Error(error.error || `Upload failed with status: ${xhr.status}`));
                 } catch {
-                    reject(new Error(`Upload failed with status: ${xhr.status} ${xhr.statusText}`));
+                    reject(new Error(xhr.responseText || `Upload failed with status: ${xhr.status}`));
                 }
             }
         };
@@ -268,9 +268,9 @@ export default function BucketPage() {
             reject(new Error('Upload failed due to a network error.'));
         };
         
-        // We no longer need to set content-type here, the browser will do it for FormData
         const formData = new FormData();
         formData.append('file', file);
+        // Let the browser set the Content-Type header with the correct boundary
         xhr.send(formData);
     });
   }
@@ -326,7 +326,6 @@ export default function BucketPage() {
   };
 
   const handleCreateFolder = async (folderName: string) => {
-      // Ensure folderName doesn't have slashes from user input
       if (folderName.includes('/')) {
         toast({ title: "Invalid Name", description: "Folder name cannot contain slashes.", variant: "destructive" });
         return;
@@ -337,6 +336,7 @@ export default function BucketPage() {
       try {
           const res = await fetch(`/api/objects/${bucketName}/${encodeURIComponent(key)}`, {
               method: 'PUT',
+              body: '', // Empty body is crucial
           });
           if (!res.ok) {
               const errorData = await res.json();
@@ -595,4 +595,3 @@ export default function BucketPage() {
     </>
   );
 }
-
