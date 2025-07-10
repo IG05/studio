@@ -73,7 +73,7 @@ export type AccessRequest = {
 export type AuditLog = {
   id: string;
   timestamp: string; // ISO string
-  eventType: 'ACCESS_REQUEST_DECISION' | 'ROLE_CHANGE' | 'PERMISSIONS_CHANGE' | 'ACCESS_REVOKED' | 'FILE_UPLOAD' | 'FOLDER_CREATE' | 'OBJECT_DELETE';
+  eventType: 'ACCESS_REQUEST_DECISION' | 'ROLE_CHANGE' | 'PERMISSIONS_CHANGE' | 'ACCESS_REVOKED' | 'FILE_UPLOAD' | 'FOLDER_CREATE' | 'OBJECT_DELETE' | 'FILE_DOWNLOAD';
   actor: {
     userId: string;
     email: string | null;

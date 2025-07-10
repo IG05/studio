@@ -17,7 +17,7 @@ import { Header } from '@/components/header';
 import type { AccessRequest, AppUser, AuditLog, Bucket } from '@/lib/types';
 import { format, parseISO, formatDistanceToNow, subDays } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
-import { CheckCircle, XCircle, MoreVertical, ShieldCheck, User as UserIcon, Check, KeyRound, Crown, Search, FileCheck, UserCog, Eye, HardDrive, ShieldOff, Slash, UserRoundCheck, FileUp, FolderPlus, Trash2, CalendarIcon, Filter, FilterX, Plus } from 'lucide-react';
+import { CheckCircle, XCircle, MoreVertical, ShieldCheck, User as UserIcon, Check, KeyRound, Crown, Search, FileCheck, UserCog, Eye, HardDrive, ShieldOff, Slash, UserRoundCheck, FileUp, FolderPlus, Trash2, CalendarIcon, Filter, FilterX, Plus, Download } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -55,6 +55,7 @@ const ALL_EVENT_TYPES: AuditLog['eventType'][] = [
     'ROLE_CHANGE',
     'PERMISSIONS_CHANGE',
     'FILE_UPLOAD',
+    'FILE_DOWNLOAD',
     'FOLDER_CREATE',
     'OBJECT_DELETE'
 ];
@@ -515,6 +516,7 @@ const LogsTable = ({ logs, isLoading, onViewDetails }: { logs: AuditLog[], isLoa
             case 'ROLE_CHANGE': return <UserCog className="h-5 w-5 text-blue-500" />;
             case 'PERMISSIONS_CHANGE': return <KeyRound className="h-5 w-5 text-yellow-500" />;
             case 'FILE_UPLOAD': return <FileUp className="h-5 w-5 text-green-500" />;
+            case 'FILE_DOWNLOAD': return <Download className="h-5 w-5 text-blue-500" />;
             case 'FOLDER_CREATE': return <FolderPlus className="h-5 w-5 text-green-500" />;
             case 'OBJECT_DELETE': return <Trash2 className="h-5 w-5 text-red-500" />;
             default: return null;
@@ -578,13 +580,21 @@ const LogsTable = ({ logs, isLoading, onViewDetails }: { logs: AuditLog[], isLoa
                         {reasonHtml}
                     </div>
                 );
+            case 'FILE_DOWNLOAD':
             case 'FILE_UPLOAD':
             case 'FOLDER_CREATE':
             case 'OBJECT_DELETE':
+                let actionText = '';
+                switch (log.eventType) {
+                    case 'FILE_DOWNLOAD': actionText = 'Downloaded file'; break;
+                    case 'FILE_UPLOAD': actionText = 'Uploaded file'; break;
+                    case 'FOLDER_CREATE': actionText = 'Created folder'; break;
+                    case 'OBJECT_DELETE': actionText = 'Deleted object'; break;
+                }
                 return (
                     <div>
                         <div>
-                            <span>{log.eventType === 'FILE_UPLOAD' ? 'Uploaded file' : log.eventType === 'FOLDER_CREATE' ? 'Created folder' : 'Deleted object'} </span>
+                            <span>{actionText} </span>
                             <span className="font-mono text-xs bg-muted px-1 py-0.5 rounded">{log.target.objectKey}</span>
                             <span> in bucket </span>
                             <span className="font-semibold">{log.target.bucketName}</span>.
@@ -729,6 +739,7 @@ function EventTypeFilter({ selectedTypes, onTypeChange }: { selectedTypes: strin
         'ROLE_CHANGE': 'Role Changes',
         'PERMISSIONS_CHANGE': 'Permissions Changes',
         'FILE_UPLOAD': 'File Uploads',
+        'FILE_DOWNLOAD': 'File Downloads',
         'FOLDER_CREATE': 'Folder Creations',
         'OBJECT_DELETE': 'Object Deletions'
     };

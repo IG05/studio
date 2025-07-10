@@ -22,7 +22,7 @@ import {
     TabsTrigger,
   } from "@/components/ui/tabs";
 import { Skeleton } from '@/components/ui/skeleton';
-import { Info, MoreVertical, Eye, FileCheck, ShieldOff, UserCog, KeyRound, FileUp, FolderPlus, Trash2 } from 'lucide-react';
+import { Info, MoreVertical, Eye, FileCheck, ShieldOff, UserCog, KeyRound, FileUp, FolderPlus, Trash2, Download } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -67,14 +67,18 @@ export default function MyRequestsPage() {
         const fetchLogs = async () => {
             setIsLoadingLogs(true);
             try {
-                const params = new URLSearchParams({ userId: session.user.id! });
+                const fileActivityEvents = ['FILE_UPLOAD', 'FOLDER_CREATE', 'OBJECT_DELETE', 'FILE_DOWNLOAD'];
+                const params = new URLSearchParams({ 
+                    userId: session.user.id!,
+                    eventTypes: fileActivityEvents.join(','),
+                });
                 const res = await fetch(`/api/audit-logs?${params.toString()}`);
                 const data = await res.json();
                 if (!res.ok) {
                   const error = await res.json().catch(() => ({error: 'Failed to fetch activity logs.'}));
                   throw new Error(error.error || 'Failed to fetch activity logs.');
                 }
-                setLogs(Array.isArray(data) ? data.filter(log => ['FILE_UPLOAD', 'FOLDER_CREATE', 'OBJECT_DELETE'].includes(log.eventType)) : []);
+                setLogs(Array.isArray(data) ? data : []);
             } catch (err: any) {
                 console.error("Failed to fetch logs", err);
                 setLogs([]);
@@ -219,26 +223,29 @@ const ActivityLogTable = ({ logs, isLoading }: { logs: AuditLog[], isLoading: bo
             case 'FILE_UPLOAD': return <FileUp className="h-5 w-5 text-green-500" />;
             case 'FOLDER_CREATE': return <FolderPlus className="h-5 w-5 text-green-500" />;
             case 'OBJECT_DELETE': return <Trash2 className="h-5 w-5 text-red-500" />;
+            case 'FILE_DOWNLOAD': return <Download className="h-5 w-5 text-blue-500" />;
             default: return null;
         }
     };
 
     const renderDetails = (log: AuditLog) => {
+        let actionText = '';
         switch (log.eventType) {
-            case 'FILE_UPLOAD':
-            case 'FOLDER_CREATE':
-            case 'OBJECT_DELETE':
-                return (
-                    <div>
-                        <span>{log.eventType === 'FILE_UPLOAD' ? 'Uploaded file' : log.eventType === 'FOLDER_CREATE' ? 'Created folder' : 'Deleted object'} </span>
-                        <span className="font-mono text-xs bg-muted px-1 py-0.5 rounded">{log.target.objectKey}</span>
-                        <span> in bucket </span>
-                        <span className="font-semibold">{log.target.bucketName}</span>.
-                    </div>
-                );
-            default:
-                return null;
+            case 'FILE_UPLOAD': actionText = 'Uploaded file'; break;
+            case 'FOLDER_CREATE': actionText = 'Created folder'; break;
+            case 'OBJECT_DELETE': actionText = 'Deleted object'; break;
+            case 'FILE_DOWNLOAD': actionText = 'Downloaded file'; break;
+            default: return null;
         }
+
+        return (
+            <div>
+                <span>{actionText} </span>
+                <span className="font-mono text-xs bg-muted px-1 py-0.5 rounded">{log.target.objectKey}</span>
+                <span> in bucket </span>
+                <span className="font-semibold">{log.target.bucketName}</span>.
+            </div>
+        );
     };
     
     return (

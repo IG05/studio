@@ -87,7 +87,7 @@ export async function GET(
     if (!session?.user?.id || !session.user.role) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
+    const user = session.user as S3CommanderUser;
     const { bucketName } = context.params;
     const objectKey = decodeURIComponent(context.params.key.join('/'));
 
@@ -119,6 +119,16 @@ export async function GET(
         if (forDownload === 'true') {
             const filename = objectKey.split('/').pop() || objectKey;
             commandParams.ResponseContentDisposition = `attachment; filename="${filename}"`;
+            
+            // Log the download action
+            const { db } = await connectToDatabase();
+            await db.collection('auditLogs').insertOne({
+                timestamp: new Date(),
+                eventType: 'FILE_DOWNLOAD',
+                actor: { userId: user.id, email: user.email },
+                target: { bucketName, objectKey },
+                details: {}
+            });
         }
 
         const signedUrl = await getSignedUrl(s3Client, new GetObjectCommand(commandParams), { expiresIn: 60 });
