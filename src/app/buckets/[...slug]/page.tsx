@@ -250,9 +250,20 @@ export default function BucketPage() {
 
     for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        const isFolderUpload = !!(file as any).webkitRelativePath;
-        const key = isFolderUpload ? (file as any).webkitRelativePath : `${currentPrefix}${file.name}`;
+        // webkitRelativePath is a browser-specific property for folder uploads
+        const relativePath = (file as any).webkitRelativePath;
+        const key = relativePath ? `${currentPrefix}${relativePath}` : `${currentPrefix}${file.name}`;
         
+        // Skip dummy zero-byte files that some browsers create for folders
+        if (relativePath && file.size === 0) {
+            const folderKey = `${currentPrefix}${relativePath}/`;
+            // Check if it's the root folder of the upload
+            if (relativePath.split('/').length === 2 && relativePath.endsWith('/')) {
+              await handleCreateFolder(folderKey, true); // Create base folder if needed
+            }
+            continue;
+        }
+
         setUploadProgress(prev => ({
             ...prev!,
             fileName: file.name,
@@ -261,32 +272,33 @@ export default function BucketPage() {
         }));
 
         try {
-            // Get presigned URL
+            // Get presigned URL by sending a PUT request with content type
             const presignedRes = await fetch(`/api/objects/${bucketName}/${encodeURIComponent(key)}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ contentType: file.type || 'application/octet-stream' }),
             });
+
             if (!presignedRes.ok) {
                 const data = await presignedRes.json();
                 throw new Error(data.error || `Could not get upload URL for ${file.name}.`);
             }
             const { url } = await presignedRes.json();
 
-            // Upload to S3
+            // Upload the actual file to the received presigned URL
             const uploadRes = await fetch(url, {
                 method: 'PUT',
                 body: file,
                 headers: { 'Content-Type': file.type || 'application/octet-stream' },
             });
+
             if (!uploadRes.ok) {
-                throw new Error(`Upload failed for ${file.name}.`);
+                throw new Error(`Upload failed for ${file.name}. Status: ${uploadRes.status}`);
             }
         } catch (err: any) {
             console.error(err);
             toast({ title: 'Upload Error', description: err.message, variant: 'destructive' });
-            // Stop on first error
-            setUploadProgress(null);
+            setUploadProgress(null); // Stop on first error
             return;
         }
     }
@@ -294,41 +306,48 @@ export default function BucketPage() {
     setUploadProgress(null);
     toast({ title: "Upload Complete", description: `${files.length} file(s) uploaded successfully.` });
     
-    // Reset file inputs
+    // Reset file inputs to allow re-uploading the same files
     if(fileInputRef.current) fileInputRef.current.value = "";
     if(folderInputRef.current) folderInputRef.current.value = "";
 
     fetchObjects();
   };
 
+  const handleCreateFolder = async (folderName: string, fromUpload = false) => {
+      const key = folderName.endsWith('/') ? folderName : `${currentPrefix}${folderName}/`;
+      setInteractingObject({ key, action: 'create-folder'});
 
-  const handleCreateFolder = async (folderName: string) => {
-    let key = `${currentPrefix}${folderName}/`;
-    if (!key.endsWith('/')) key += '/';
-
-    setInteractingObject({ key: key, action: 'create-folder'});
-
-    try {
-      const res = await fetch(`/api/objects/${bucketName}/${encodeURIComponent(key)}`, {
-        method: 'PUT',
-        body: '', // Empty body for folder creation
-      });
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.error || "Could not create folder.");
+      try {
+          const res = await fetch(`/api/objects/${bucketName}/${encodeURIComponent(key)}`, {
+              method: 'PUT',
+          });
+          if (!res.ok) {
+              // Attempt to parse error, but handle cases where it might not be JSON
+              let errorMsg = "Could not create folder.";
+              try {
+                  const errorData = await res.json();
+                  errorMsg = errorData.error || errorMsg;
+              } catch (e) {
+                   console.log("Response was not JSON.", await res.text());
+              }
+              throw new Error(errorMsg);
+          }
+          if (!fromUpload) {
+            toast({ title: "Folder Created", description: `Folder "${folderName}" created successfully.` });
+            fetchObjects();
+          }
+      } catch (err: any) {
+          console.error("Create folder failed", err);
+          if (!fromUpload) {
+            toast({
+                title: 'Create Folder Error',
+                description: err.message || 'Could not create the folder.',
+                variant: 'destructive',
+            });
+          }
+      } finally {
+          setInteractingObject(null);
       }
-      toast({ title: "Folder Created", description: `Folder "${folderName}" created successfully.` });
-      fetchObjects();
-    } catch (err: any) {
-       console.error("Create folder failed", err);
-        toast({
-            title: 'Create Folder Error',
-            description: err.message || 'Could not create the folder.',
-            variant: 'destructive',
-        });
-    } finally {
-        setInteractingObject(null);
-    }
   };
 
   const handleSelectAll = (checked: boolean) => {
@@ -562,3 +581,5 @@ export default function BucketPage() {
     </>
   );
 }
+
+    
