@@ -7,7 +7,7 @@ import type { NextRequest } from 'next/server';
 
 export async function GET(request: NextRequest) {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.id || !session.user.role || !['admin', 'owner'].includes(session.user.role)) {
+    if (!session?.user?.id) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     
@@ -17,54 +17,80 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
     const searchQuery = searchParams.get('searchQuery');
+
+    // Security Check: Admins/Owners can query anything. Users can only query their own logs.
+    const isAdminOrOwner = ['admin', 'owner'].includes(session.user.role!);
+    if (!isAdminOrOwner && userId !== session.user.id) {
+         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
     
     try {
         const { db } = await connectToDatabase();
         
         let query: any = {};
+        let finalQuery: any = {};
         
+        const textSearchConditions: any[] = [];
+        if (searchQuery) {
+            const regex = { $regex: searchQuery, $options: 'i' };
+            textSearchConditions.push(
+                { 'actor.email': regex },
+                { 'target.userEmail': regex },
+                { 'target.userName': regex },
+                { 'target.bucketName': regex },
+                { 'target.objectKey': regex },
+                { 'details.reason': regex },
+                { 'details.permissionsChangeSummary': regex },
+            );
+        }
+
+        const filterConditions: any[] = [];
         if (eventTypesParam) {
             const eventTypes = eventTypesParam.split(',');
             if (eventTypes.length > 0) {
-                query.eventType = { $in: eventTypes };
+                filterConditions.push({ eventType: { $in: eventTypes } });
             }
         }
 
         if (userId) {
             // Find logs where the user is either the actor OR the target
-            query.$or = [
-                { 'actor.userId': userId },
-                { 'target.userId': userId }
-            ];
+            filterConditions.push({ 
+                $or: [
+                    { 'actor.userId': userId },
+                    { 'target.userId': userId }
+                ]
+            });
         }
 
         if (startDate || endDate) {
-            query.timestamp = {};
+            const timestampFilter: any = {};
             if (startDate) {
-                query.timestamp.$gte = new Date(startDate);
+                timestampFilter.$gte = new Date(startDate);
             }
             if (endDate) {
-                query.timestamp.$lte = new Date(endDate);
+                timestampFilter.$lte = new Date(endDate);
             }
+            filterConditions.push({ timestamp: timestampFilter });
         }
         
-        if (searchQuery) {
-            // Note: For this to be efficient, you need a text index in your MongoDB collection.
-            // Example: db.auditLogs.createIndex({ "$**": "text" })
-            // As a fallback, this uses regex which is less performant on large datasets.
-             query.$or = [
-                ...(query.$or || []),
-                { 'actor.email': { $regex: searchQuery, $options: 'i' } },
-                { 'target.userEmail': { $regex: searchQuery, $options: 'i' } },
-                { 'target.userName': { $regex: searchQuery, $options: 'i' } },
-                { 'target.bucketName': { $regex: searchQuery, $options: 'i' } },
-                { 'target.objectKey': { $regex: searchQuery, $options: 'i' } },
-                { 'details.reason': { $regex: searchQuery, $options: 'i' } },
-                { 'details.permissionsChangeSummary': { $regex: searchQuery, $options: 'i' } },
-            ];
+        // Combine all conditions
+        if (filterConditions.length > 0) {
+            query.$and = filterConditions;
         }
-        
-        const logsCursor = db.collection('auditLogs').find(query).sort({ timestamp: -1 });
+
+        if (textSearchConditions.length > 0) {
+            if (query.$and) {
+                // If there are other filters, combine with text search
+                finalQuery = { $and: [query, { $or: textSearchConditions }] };
+            } else {
+                // If only text search is present
+                finalQuery = { $or: textSearchConditions };
+            }
+        } else {
+            finalQuery = query;
+        }
+
+        const logsCursor = db.collection('auditLogs').find(finalQuery).sort({ timestamp: -1 });
         const logsFromDb = await logsCursor.toArray();
         
         if (logsFromDb.length === 0) {

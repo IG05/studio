@@ -16,7 +16,7 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { LayoutDashboard, ShieldCheck, LogOut, HardDrive, ChevronRight, History, Edit } from 'lucide-react';
+import { LayoutDashboard, ShieldCheck, LogOut, HardDrive, ChevronRight, History, Edit, Activity } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
     Collapsible,
@@ -31,7 +31,7 @@ import { signOut, useSession } from 'next-auth/react';
 
 const menuLinks = [
     { href: '/', label: 'Dashboard', icon: LayoutDashboard, roles: ['owner', 'admin', 'user'] },
-    { href: '/requests', label: 'My Requests', icon: History, roles: ['user'] },
+    { href: '/requests', label: 'My Activity', icon: Activity, roles: ['user'] },
     { href: '/admin', label: 'Admin', icon: ShieldCheck, roles: ['owner', 'admin'] },
 ];
 

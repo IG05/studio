@@ -70,7 +70,10 @@ export default function MyRequestsPage() {
                 const params = new URLSearchParams({ userId: session.user.id! });
                 const res = await fetch(`/api/audit-logs?${params.toString()}`);
                 const data = await res.json();
-                if (!res.ok) throw new Error(data.error || 'Failed to fetch activity logs.');
+                if (!res.ok) {
+                  const error = await res.json().catch(() => ({error: 'Failed to fetch activity logs.'}));
+                  throw new Error(error.error || 'Failed to fetch activity logs.');
+                }
                 setLogs(Array.isArray(data) ? data.filter(log => ['FILE_UPLOAD', 'FOLDER_CREATE', 'OBJECT_DELETE'].includes(log.eventType)) : []);
             } catch (err: any) {
                 console.error("Failed to fetch logs", err);
@@ -111,13 +114,13 @@ export default function MyRequestsPage() {
         onOpenChange={(isOpen) => !isOpen && setViewingRequest(null)}
     />
     <div className="flex flex-col h-full w-full">
-      <Header title="My History" />
+      <Header title="My Activity" />
         <div className="p-4 md:p-6 flex-1 overflow-y-auto">
-            <Tabs value={activeTab} onValueChange={setActiveTab}>
-                <TabsList className="mb-4">
-                    <TabsTrigger value="pending">Pending</TabsTrigger>
+            <Tabs value={activeTab} onValueChange={setActiveTab} defaultValue='pending'>
+                <TabsList className="mb-4 grid w-full grid-cols-3 h-auto sm:inline-flex sm:w-auto sm:h-10">
+                    <TabsTrigger value="pending">Pending Requests</TabsTrigger>
                     <TabsTrigger value="historical">Request History</TabsTrigger>
-                    <TabsTrigger value="activity">My Activity</TabsTrigger>
+                    <TabsTrigger value="activity">File Activity</TabsTrigger>
                 </TabsList>
                 <TabsContent value="pending">
                     <RequestsTable requests={filteredRequests} getBadgeVariant={getBadgeVariant} isLoading={isLoadingRequests} onViewDetails={setViewingRequest} activeTab={activeTab} />
@@ -157,7 +160,7 @@ const RequestsTable = ({ requests, getBadgeVariant, isLoading, onViewDetails, ac
               ))
             ) : requests.length === 0 ? (
                 <TableRow>
-                    <TableCell colSpan={activeTab === 'historical' ? 6 : 5} className="h-24 text-center">You have not made any requests in this category.</TableCell>
+                    <TableCell colSpan={activeTab === 'historical' ? 6 : 5} className="h-24 text-center">You have no requests in this category.</TableCell>
                 </TableRow>
             ) : requests.map((req) => {
                 const actionDate = req.revokedAt || req.deniedAt || req.approvedAt;
