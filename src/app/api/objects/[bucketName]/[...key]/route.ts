@@ -215,5 +215,3 @@ export async function PUT(
         return NextResponse.json({ error: 'Failed to create resource.' }, { status: 500 });
     }
 }
-
-    
