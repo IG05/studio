@@ -59,7 +59,7 @@ type UploadProgress = {
     individualProgress: number;
 };
 
-const VIEWABLE_EXTENSIONS = ['json', 'txt', 'md', 'csv', 'xml', 'html', 'css', 'js', 'ts', 'log'];
+const VIEWABLE_EXTENSIONS = ['json', 'txt', 'md', 'csv', 'xml', 'html', 'css', 'js', 'ts', 'log', 'pdf'];
 
 export default function BucketPage() {
   const params = useParams();
@@ -274,7 +274,6 @@ export default function BucketPage() {
         
         const formData = new FormData();
         formData.append('file', file);
-        // Let the browser set the Content-Type header with the correct boundary
         xhr.send(formData);
     });
   }
