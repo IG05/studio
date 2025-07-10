@@ -80,13 +80,13 @@ export function RequestAccessDialog({ children, bucket, onAccessRequest }: Reque
         body: JSON.stringify({
           reason: values.reason,
           durationInMinutes: durationInMinutes,
-          bucketName: bucket.name,
-          region: bucket.region,
+          buckets: [bucket],
         }),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to submit request');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to submit request');
       }
 
       toast({
@@ -97,11 +97,11 @@ export function RequestAccessDialog({ children, bucket, onAccessRequest }: Reque
       onAccessRequest(); // Refresh the parent component's data
       form.reset();
 
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
       toast({
         title: 'Error',
-        description: 'Could not submit your access request. Please try again.',
+        description: error.message || 'Could not submit your access request. Please try again.',
         variant: 'destructive',
       });
     } finally {
@@ -182,6 +182,7 @@ export function RequestAccessDialog({ children, bucket, onAccessRequest }: Reque
               )}
             />
             <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
                 <Button type="submit" disabled={!form.formState.isValid || isSubmitting}>
                     {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Submit Request
