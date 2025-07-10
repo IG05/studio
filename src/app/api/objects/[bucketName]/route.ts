@@ -54,7 +54,7 @@ export async function GET(
     }
     
     const user = session.user as S3CommanderUser;
-    const bucketName = params.bucketName;
+    const {bucketName} = await params;
 
     // All visible buckets are readable. Check for write access separately.
     const hasWriteAccess = await checkWriteAccess(user, bucketName);

@@ -78,7 +78,7 @@ export async function GET(
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { bucketName, key: keyParts } = context.params;
+    const { bucketName, key: keyParts } = await context.params;
     
     const pathname = new URL(request.url).pathname;
     const prefix = `/api/objects/${bucketName}/`;
@@ -136,7 +136,7 @@ export async function DELETE(
     }
     
     const user = session.user as S3CommanderUser;
-    const { bucketName, key: keyParts } = context.params;
+    const { bucketName, key: keyParts } = await context.params;
     const objectKey = keyParts.join('/');
 
     const hasAccess = await checkWriteAccess(user, bucketName);
@@ -168,8 +168,8 @@ export async function PUT(
     }
 
     const user = session.user as S3CommanderUser;
-    const { bucketName, key: keyParts } = context.params;
-    const objectKey = keyParts.join('/');
+    const { bucketName } = context.params;
+    const objectKey = decodeURIComponent(context.params.key.join('/'));
 
     const hasAccess = await checkWriteAccess(user, bucketName);
     if (!hasAccess) {
@@ -179,12 +179,11 @@ export async function PUT(
     const s3Client = await getS3Client(bucketName);
 
     // If key ends with '/', it's a folder creation request.
-    // This request comes from the client with an empty body.
     if (objectKey.endsWith('/')) {
         try {
             const command = new PutObjectCommand({ 
                 Bucket: bucketName, 
-                Key: objectKey, 
+                Key: objectKey,
                 Body: '', // Zero-byte body for folder creation
             });
             await s3Client.send(command);
@@ -213,7 +212,7 @@ export async function PUT(
             return NextResponse.json({ url: signedUrl });
         } catch (error: any) {
             console.error(`Failed to process presigned URL for ${objectKey} in bucket ${bucketName}:`, error);
-            // This catches JSON parsing errors for empty bodies (like folder creation attempts)
+            // This catches JSON parsing errors for folder creation attempts if frontend sends empty body
             if (error instanceof SyntaxError) {
                  return NextResponse.json({ error: 'Invalid request body. For file uploads, a JSON body with contentType is required.' }, { status: 400 });
             }

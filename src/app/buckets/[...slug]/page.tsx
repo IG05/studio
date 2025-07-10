@@ -262,7 +262,7 @@ export default function BucketPage() {
 
         try {
             // Get presigned URL
-            const presignedRes = await fetch(`/api/objects/${bucketName}/${key}`, {
+            const presignedRes = await fetch(`/api/objects/${bucketName}/${encodeURIComponent(key)}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ contentType: file.type || 'application/octet-stream' }),
@@ -303,11 +303,13 @@ export default function BucketPage() {
 
 
   const handleCreateFolder = async (folderName: string) => {
-    const key = `${currentPrefix}${folderName}/`;
+    let key = `${currentPrefix}${folderName}/`;
+    if (!key.endsWith('/')) key += '/';
+
     setInteractingObject({ key: key, action: 'create-folder'});
 
     try {
-      const res = await fetch(`/api/objects/${bucketName}/${key}`, {
+      const res = await fetch(`/api/objects/${bucketName}/${encodeURIComponent(key)}`, {
         method: 'PUT',
         body: '', // Empty body for folder creation
       });
@@ -390,7 +392,7 @@ export default function BucketPage() {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent>
                         <DropdownMenuItem onSelect={() => fileInputRef.current?.click()}>
-                            <FileUp className="w-4 h-4 mr-2" /> Upload file
+                            <FileUp className="w-4 h-4 mr-2" /> Upload file(s)
                         </DropdownMenuItem>
                         <DropdownMenuItem onSelect={() => folderInputRef.current?.click()}>
                             <FolderUp className="w-4 h-4 mr-2" /> Upload folder
