@@ -202,8 +202,6 @@ export async function PUT(
 
                 return NextResponse.json({ url: signedUrl });
             } catch (error) {
-                 // This catch block will handle SyntaxError if request.json() fails on an empty body from a folder creation attempt.
-                 // This error message is what the user is seeing.
                  return NextResponse.json({ error: 'Invalid request body. For file uploads, a JSON body with contentType is required.' }, { status: 400 });
             }
         }
