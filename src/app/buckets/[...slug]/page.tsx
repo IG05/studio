@@ -56,6 +56,7 @@ type UploadProgress = {
     totalFiles: number;
     currentFileNumber: number;
     overallProgress: number;
+    individualProgress: number;
 };
 
 const VIEWABLE_EXTENSIONS = ['json', 'txt', 'md', 'csv', 'xml', 'html', 'css', 'js', 'ts', 'log'];
@@ -133,7 +134,7 @@ export default function BucketPage() {
   
   const getSignedUrl = async (objectKey: string, forDownload = false) => {
     const downloadQuery = forDownload ? '?for_download=true' : '';
-    const res = await fetch(`/api/objects/${bucketName}/${objectKey}${downloadQuery}`);
+    const res = await fetch(`/api/objects/${bucketName}/${encodeURIComponent(objectKey)}${downloadQuery}`);
     const data = await res.json();
     if (!res.ok) {
       throw new Error(data.error || 'Failed to get secure link.');
@@ -188,7 +189,7 @@ export default function BucketPage() {
   const handleDelete = async (objectKey: string) => {
     setInteractingObject({ key: objectKey, action: 'delete' });
     try {
-      const res = await fetch(`/api/objects/${bucketName}/${objectKey}`, {
+      const res = await fetch(`/api/objects/${bucketName}/${encodeURIComponent(objectKey)}`, {
         method: 'DELETE',
       });
       if (!res.ok) {
@@ -215,7 +216,7 @@ export default function BucketPage() {
     try {
       await Promise.all(
         itemsToDelete.map(key =>
-          fetch(`/api/objects/${bucketName}/${key}`, { method: 'DELETE' }).then(res => {
+          fetch(`/api/objects/${bucketName}/${encodeURIComponent(key)}`, { method: 'DELETE' }).then(res => {
             if (!res.ok) throw new Error(`Failed to delete ${key}`);
           })
         )
@@ -238,6 +239,36 @@ export default function BucketPage() {
     }
   };
 
+  const uploadFileWithProgress = (url: string, file: File, onProgress: (progress: number) => void) => {
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('PUT', url, true);
+        xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+        
+        xhr.upload.onprogress = (event) => {
+            if (event.lengthComputable) {
+                const percentComplete = (event.loaded / event.total) * 100;
+                onProgress(percentComplete);
+            }
+        };
+
+        xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                onProgress(100);
+                resolve(xhr.response);
+            } else {
+                reject(new Error(`Upload failed with status: ${xhr.status} ${xhr.statusText}`));
+            }
+        };
+
+        xhr.onerror = () => {
+            reject(new Error('Upload failed due to a network error.'));
+        };
+
+        xhr.send(file);
+    });
+  }
+
   const uploadFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
     
@@ -246,20 +277,22 @@ export default function BucketPage() {
         totalFiles: files.length,
         currentFileNumber: 1,
         overallProgress: 0,
+        individualProgress: 0,
     });
 
     for (let i = 0; i < files.length; i++) {
         const file = files[i];
         // webkitRelativePath is a browser-specific property for folder uploads
-        const relativePath = (file as any).webkitRelativePath;
-        const key = relativePath ? `${currentPrefix}${relativePath}` : `${currentPrefix}${file.name}`;
+        const relativePath = (file as any).webkitRelativePath || file.name;
+        const key = `${currentPrefix}${relativePath}`;
         
-        // Skip dummy zero-byte files that some browsers create for folders
-        if (relativePath && file.size === 0) {
-            const folderKey = `${currentPrefix}${relativePath}/`;
-            // Check if it's the root folder of the upload
-            if (relativePath.split('/').length === 2 && relativePath.endsWith('/')) {
-              await handleCreateFolder(folderKey, true); // Create base folder if needed
+        if ((file as any).webkitRelativePath && file.size === 0 && !key.endsWith('/')) {
+            // Skip dummy zero-byte files that some browsers create for folders
+            // but ensure we still try to create the folder if needed
+             try {
+                await handleCreateFolder(relativePath.substring(0, relativePath.lastIndexOf('/') + 1), true);
+            } catch (e) {
+                 // May fail if folder already exists, which is fine
             }
             continue;
         }
@@ -268,11 +301,12 @@ export default function BucketPage() {
             ...prev!,
             fileName: file.name,
             currentFileNumber: i + 1,
-            overallProgress: (i / files.length) * 100
+            overallProgress: (i / files.length) * 100,
+            individualProgress: 0
         }));
 
         try {
-            // Get presigned URL by sending a PUT request with content type
+            // Get presigned URL
             const presignedRes = await fetch(`/api/objects/${bucketName}/${encodeURIComponent(key)}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
@@ -285,16 +319,11 @@ export default function BucketPage() {
             }
             const { url } = await presignedRes.json();
 
-            // Upload the actual file to the received presigned URL
-            const uploadRes = await fetch(url, {
-                method: 'PUT',
-                body: file,
-                headers: { 'Content-Type': file.type || 'application/octet-stream' },
+            // Upload the actual file to the received presigned URL with progress tracking
+            await uploadFileWithProgress(url, file, (progress) => {
+                 setUploadProgress(prev => prev ? ({ ...prev, individualProgress: progress }) : null);
             });
 
-            if (!uploadRes.ok) {
-                throw new Error(`Upload failed for ${file.name}. Status: ${uploadRes.status}`);
-            }
         } catch (err: any) {
             console.error(err);
             toast({ title: 'Upload Error', description: err.message, variant: 'destructive' });
@@ -306,7 +335,6 @@ export default function BucketPage() {
     setUploadProgress(null);
     toast({ title: "Upload Complete", description: `${files.length} file(s) uploaded successfully.` });
     
-    // Reset file inputs to allow re-uploading the same files
     if(fileInputRef.current) fileInputRef.current.value = "";
     if(folderInputRef.current) folderInputRef.current.value = "";
 
@@ -314,7 +342,7 @@ export default function BucketPage() {
   };
 
   const handleCreateFolder = async (folderName: string, fromUpload = false) => {
-      const key = folderName.endsWith('/') ? folderName : `${currentPrefix}${folderName}/`;
+      const key = folderName.endsWith('/') ? `${currentPrefix}${folderName}` : `${currentPrefix}${folderName}/`;
       setInteractingObject({ key, action: 'create-folder'});
 
       try {
@@ -322,13 +350,12 @@ export default function BucketPage() {
               method: 'PUT',
           });
           if (!res.ok) {
-              // Attempt to parse error, but handle cases where it might not be JSON
               let errorMsg = "Could not create folder.";
               try {
                   const errorData = await res.json();
                   errorMsg = errorData.error || errorMsg;
               } catch (e) {
-                   console.log("Response was not JSON.", await res.text());
+                   console.log("Response for create folder was not JSON.", await res.text());
               }
               throw new Error(errorMsg);
           }
@@ -344,6 +371,10 @@ export default function BucketPage() {
                 description: err.message || 'Could not create the folder.',
                 variant: 'destructive',
             });
+          } else {
+             // Silently fail if creating a folder during an upload fails
+             // (e.g., it likely already exists, which is fine)
+             console.warn(`Could not create folder structure during upload: ${key}`);
           }
       } finally {
           setInteractingObject(null);
@@ -437,14 +468,22 @@ export default function BucketPage() {
         )}
 
         {uploadProgress && (
-            <div className="my-4 p-4 border rounded-lg bg-muted">
-                <div className="flex justify-between items-center mb-2">
+            <div className="my-4 p-4 border rounded-lg bg-muted space-y-2">
+                <div className="flex justify-between items-center mb-1">
                     <p className="text-sm font-medium">
-                        Uploading ({uploadProgress.currentFileNumber}/{uploadProgress.totalFiles}): {uploadProgress.fileName}
+                        Overall Progress ({uploadProgress.currentFileNumber}/{uploadProgress.totalFiles})
                     </p>
                     <p className="text-sm text-muted-foreground">{Math.round(uploadProgress.overallProgress)}%</p>
                 </div>
                 <Progress value={uploadProgress.overallProgress} />
+
+                 <div className="flex justify-between items-center mb-1 pt-2">
+                    <p className="text-sm font-medium truncate pr-4">
+                       Uploading: {uploadProgress.fileName}
+                    </p>
+                    <p className="text-sm text-muted-foreground">{Math.round(uploadProgress.individualProgress)}%</p>
+                </div>
+                <Progress value={uploadProgress.individualProgress} className="h-2" />
             </div>
         )}
 
@@ -581,5 +620,3 @@ export default function BucketPage() {
     </>
   );
 }
-
-    

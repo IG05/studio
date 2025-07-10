@@ -78,11 +78,8 @@ export async function GET(
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { bucketName, key: keyParts } = await context.params;
-    
-    const pathname = new URL(request.url).pathname;
-    const prefix = `/api/objects/${bucketName}/`;
-    const objectKey = decodeURIComponent(pathname.replace(prefix, ''));
+    const { bucketName } = context.params;
+    const objectKey = decodeURIComponent(context.params.key.join('/'));
 
 
     const { searchParams } = new URL(request.url);
@@ -136,8 +133,8 @@ export async function DELETE(
     }
     
     const user = session.user as S3CommanderUser;
-    const { bucketName, key: keyParts } = await context.params;
-    const objectKey = keyParts.join('/');
+    const { bucketName } = context.params;
+    const objectKey = decodeURIComponent(context.params.key.join('/'));
 
     const hasAccess = await checkWriteAccess(user, bucketName);
     if (!hasAccess) {
