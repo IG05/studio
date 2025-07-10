@@ -36,6 +36,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { CreateFolderDialog } from '@/components/create-folder-dialog';
 import { ViewObjectDialog } from '@/components/view-object-dialog';

@@ -8,24 +8,31 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import type { AppUser, AllUserPermissions } from '@/lib/types';
+import type { AppUser, AllUserPermissions, S3CommanderUser } from '@/lib/types';
 import { toast } from '@/hooks/use-toast';
-import { Loader2, KeyRound, Timer, ShieldCheck, HardDrive, Info, Edit, Trash2, Globe, CheckCircle, XCircle } from 'lucide-react';
+import { Loader2, KeyRound, Timer, ShieldCheck, HardDrive, Info, Edit, Trash2, Globe, CheckCircle, XCircle, UserCog } from 'lucide-react';
 import { format, parseISO, formatDistanceToNow } from 'date-fns';
+import { Button } from './ui/button';
+import { Separator } from './ui/separator';
 
 interface UserAccessDetailsDialogProps {
   user: AppUser | null;
+  currentUser: S3CommanderUser | undefined;
   onOpenChange: (isOpen: boolean) => void;
+  onRoleChange: (user: AppUser, role: 'ADMIN' | 'USER') => void;
 }
 
-export function UserAccessDetailsDialog({ user, onOpenChange }: UserAccessDetailsDialogProps) {
+export function UserAccessDetailsDialog({ user, currentUser, onOpenChange, onRoleChange }: UserAccessDetailsDialogProps) {
   const [permissions, setPermissions] = useState<AllUserPermissions | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const isOpen = !!user;
   
   const isPrivilegedUser = user?.role === 'ADMIN' || user?.role === 'OWNER';
+  const isOwnerViewing = currentUser?.role === 'owner';
+  const canChangeRole = isOwnerViewing && user && user.id !== currentUser.id && user.role !== 'OWNER';
 
   useEffect(() => {
     if (user && !isPrivilegedUser) {
@@ -65,12 +72,12 @@ export function UserAccessDetailsDialog({ user, onOpenChange }: UserAccessDetail
         );
     }
 
-    if (isPrivilegedUser) {
+    if (isPrivilegedUser && user) {
         return (
             <div className="text-center text-muted-foreground py-10 px-4 flex flex-col items-center gap-4">
               <Info className="h-10 w-10 text-blue-500" />
               <p className="font-semibold text-foreground">
-                As an {user?.role.toLowerCase()}, this user has unrestricted access to all S3 buckets.
+                As an {user.role.toLowerCase()}, this user has unrestricted access to all S3 buckets.
               </p>
               <p className="text-sm">Their permissions are inherent to their role and are not listed individually.</p>
             </div>
@@ -160,6 +167,32 @@ export function UserAccessDetailsDialog({ user, onOpenChange }: UserAccessDetail
     );
   }
 
+  const renderRoleManagement = () => {
+    if (!canChangeRole || !user) return null;
+
+    return (
+        <DialogFooter className="flex-col sm:flex-col sm:space-x-0 gap-4 pt-4 mt-4 border-t">
+             <div className="flex items-center gap-2">
+                <UserCog className="h-5 w-5 text-muted-foreground" />
+                <h3 className="font-semibold text-foreground">Role Management</h3>
+            </div>
+             <p className="text-sm text-muted-foreground text-left">
+                Changing a user's role has significant security implications. This action will be logged.
+            </p>
+            {user.role === 'USER' && (
+                <Button variant="outline" onClick={() => onRoleChange(user, 'ADMIN')}>
+                    <ShieldCheck className="mr-2 h-4 w-4" /> Promote to Admin
+                </Button>
+            )}
+            {user.role === 'ADMIN' && (
+                 <Button variant="destructive" onClick={() => onRoleChange(user, 'USER')}>
+                    <UserIcon className="mr-2 h-4 w-4" /> Demote to User
+                </Button>
+            )}
+        </DialogFooter>
+    );
+  }
+
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md flex flex-col max-h-[80vh]">
@@ -178,6 +211,9 @@ export function UserAccessDetailsDialog({ user, onOpenChange }: UserAccessDetail
         <div className="flex-1 overflow-y-auto -mr-6 pr-6">
             {renderContent()}
         </div>
+
+        {renderRoleManagement()}
+
       </DialogContent>
     </Dialog>
   );

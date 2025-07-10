@@ -50,6 +50,7 @@ import { RevokeAccessDialog } from '@/components/revoke-access-dialog';
 import { UserAccessDetailsDialog } from '@/components/user-access-details-dialog';
 
 export default function AdminPage() {
+  const { data: session } = useSession();
   const [requests, setRequests] = React.useState<AccessRequest[]>([]);
   const [activeRequests, setActiveRequests] = React.useState<AccessRequest[]>([]);
   const [users, setUsers] = React.useState<AppUser[]>([]);
@@ -162,7 +163,7 @@ export default function AdminPage() {
     }
   };
   
-  const handleRoleChange = (userId: string, role: string, reason: string) => {
+  const handleRoleChangeSubmit = (userId: string, role: string, reason: string) => {
     fetch(`/api/users/${userId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -178,6 +179,7 @@ export default function AdminPage() {
             description: `User role has been successfully changed to ${role}.`,
         });
         fetchAllData(); // Refetch all data
+        setViewingUserAccess(null); // Close the dialog
     })
     .catch(async (err) => {
         const error = await err;
@@ -188,6 +190,10 @@ export default function AdminPage() {
         });
     });
   }
+
+  const handleRoleChange = (user: AppUser, role: 'ADMIN' | 'USER') => {
+    setRoleChangeCandidate({ user, role });
+  };
 
   const handlePermissionsChange = () => {
     fetchAllData();
@@ -231,7 +237,7 @@ export default function AdminPage() {
       <ChangeRoleDialog
         candidate={roleChangeCandidate}
         onOpenChange={(isOpen) => !isOpen && setRoleChangeCandidate(null)}
-        onConfirm={(reason) => { if(roleChangeCandidate) { handleRoleChange(roleChangeCandidate.user.id, roleChangeCandidate.role, reason) }}}
+        onConfirm={(reason) => { if(roleChangeCandidate) { handleRoleChangeSubmit(roleChangeCandidate.user.id, roleChangeCandidate.role, reason) }}}
       />
        <RequestDetailsDialog
         request={viewingRequest}
@@ -245,7 +251,9 @@ export default function AdminPage() {
        />
        <UserAccessDetailsDialog
          user={viewingUserAccess}
+         currentUser={session?.user}
          onOpenChange={(isOpen) => !isOpen && setViewingUserAccess(null)}
+         onRoleChange={handleRoleChange}
        />
       <div className="flex flex-col h-full w-full">
         <Header title="Admin Dashboard" />
@@ -299,7 +307,7 @@ export default function AdminPage() {
                         <Input placeholder="Search by name or email..." className="pl-9" value={userSearchQuery} onChange={(e) => setUserSearchQuery(e.target.value)} />
                       </div>
                     </div>
-                      <UsersTable users={filteredUsers} onRoleChange={(user, role) => setRoleChangeCandidate({ user, role })} onAssignBuckets={setPermissionUser} onUserClick={setViewingUserAccess} isLoading={isLoading} />
+                      <UsersTable users={filteredUsers} onAssignBuckets={setPermissionUser} onUserClick={setViewingUserAccess} isLoading={isLoading} />
                   </TabsContent>
                   <TabsContent value="logs" className="mt-4">
                       <div className="flex justify-end mb-4">
@@ -360,8 +368,8 @@ const RequestsTable = ({ requests, handleApprove, handleDeny, isLoading }: { req
                 </TableCell>
                 <TableCell className="text-right">
                     <div className="flex gap-2 justify-end">
-                        <Button variant="ghost" size="icon" className="text-green-600 hover:text-green-600 hover:bg-green-100 dark:hover:bg-green-900/50" onClick={() => handleApprove(req)}><CheckCircle className="h-5 w-5" /></Button>
-                        <Button variant="ghost" size="icon" className="text-red-600 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/50" onClick={() => handleDeny(req)}><XCircle className="h-5 w-5" /></Button>
+                        <Button variant="outline" size="sm" className="text-red-600 border-red-600/50 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-900/50 dark:hover:text-red-400" onClick={() => handleDeny(req)}>Deny</Button>
+                        <Button variant="default" size="sm" onClick={() => handleApprove(req)}>Approve</Button>
                     </div>
                 </TableCell>
                 </TableRow>
@@ -535,9 +543,8 @@ const LogsTable = ({ logs, isLoading, onViewDetails }: { logs: AuditLog[], isLoa
     );
 };
 
-const UsersTable = ({ users, onRoleChange, onAssignBuckets, onUserClick, isLoading }: { users: AppUser[], onRoleChange: (user: AppUser, role: 'ADMIN' | 'USER') => void, onAssignBuckets: (user: AppUser) => void, onUserClick: (user: AppUser) => void, isLoading: boolean }) => {
+const UsersTable = ({ users, onAssignBuckets, onUserClick, isLoading }: { users: AppUser[], onAssignBuckets: (user: AppUser) => void, onUserClick: (user: AppUser) => void, isLoading: boolean }) => {
     const { data: session } = useSession();
-    const isOwner = session?.user?.role === 'owner';
     const currentUserRole = session?.user?.role;
     
     return (
@@ -580,16 +587,6 @@ const UsersTable = ({ users, onRoleChange, onAssignBuckets, onUserClick, isLoadi
                                         </Button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent>
-                                        {isOwner && (
-                                            <>
-                                                <DropdownMenuItem onClick={() => onRoleChange(user, 'ADMIN')} disabled={user.role === 'ADMIN'}>
-                                                    <ShieldCheck className="mr-2 h-4 w-4" /> Make Admin {user.role === 'ADMIN' && <Check className="ml-auto h-4 w-4" />}
-                                                </DropdownMenuItem>
-                                                <DropdownMenuItem onClick={() => onRoleChange(user, 'USER')} disabled={user.role === 'USER'}>
-                                                    <UserIcon className="mr-2 h-4 w-4" /> Make User {user.role === 'USER' && <Check className="ml-auto h-4 w-4" />}
-                                                </DropdownMenuItem>
-                                            </>
-                                        )}
                                         <DropdownMenuItem onClick={() => onAssignBuckets(user)} disabled={user.role === 'OWNER' || (currentUserRole === 'admin' && user.role === 'ADMIN')}>
                                             <KeyRound className="mr-2 h-4 w-4" /> Assign Permissions
                                         </DropdownMenuItem>
