@@ -176,12 +176,12 @@ export function HelpWidget() {
                             <Avatar className="h-8 w-8 border">
                                 <AvatarFallback><Bot className="h-5 w-5" /></AvatarFallback>
                             </Avatar>
-                            <div className="p-3 rounded-lg bg-muted text-sm whitespace-pre-wrap font-sans">{message.text}</div>
+                            <div className="p-3 rounded-lg bg-muted text-sm whitespace-pre-wrap font-sans break-words max-w-[85%]">{message.text}</div>
                         </div>
                         )}
                         {message.type === 'human' && (
                         <div className="flex items-start gap-3 justify-end">
-                            <div className="p-3 rounded-lg bg-primary text-primary-foreground text-sm">{message.text}</div>
+                            <div className="p-3 rounded-lg bg-primary text-primary-foreground text-sm break-words max-w-[85%]">{message.text}</div>
                             <Avatar className="h-8 w-8">
                                 <AvatarImage src={session.user.image || ''} />
                                 <AvatarFallback><User className="h-5 w-5" /></AvatarFallback>
@@ -200,7 +200,7 @@ export function HelpWidget() {
                             <Button
                                 key={index}
                                 variant="outline"
-                                className="w-full justify-start h-auto py-2 text-left"
+                                className="w-full justify-start h-auto py-2 text-left whitespace-normal"
                                 onClick={() => handleOptionClick(option)}
                             >
                                 {option.text}
