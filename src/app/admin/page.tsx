@@ -106,7 +106,7 @@ export default function AdminPage() {
   });
   
   const [selectedRequestIds, setSelectedRequestIds] = React.useState<string[]>([]);
-  const [bulkAction, setBulkAction] = React.useState<'approve' | 'deny' | null>(null);
+  const [bulkAction, setBulkAction] = React.useState<'approved' | 'denied' | null>(null);
 
   const [viewingRequest, setViewingRequest] = React.useState<AccessRequest | null>(null);
   const [viewingUserAccess, setViewingUserAccess] = React.useState<AppUser | null>(null);
@@ -399,7 +399,7 @@ export default function AdminPage() {
         <Header title="Admin Dashboard" />
           <div className="p-4 md:p-6 flex-1 overflow-y-auto">
               <Tabs value={activeTab} onValueChange={setActiveTab} defaultValue="pending">
-                <TabsList className="grid w-full grid-cols-2 h-auto sm:inline-flex sm:w-auto sm:h-10">
+                <TabsList className="grid w-full grid-cols-4 h-auto sm:inline-flex sm:w-auto sm:h-10">
                     <TabsTrigger value="pending">Pending Requests</TabsTrigger>
                     <TabsTrigger value="active">Active Permissions</TabsTrigger>
                     <TabsTrigger value="logs">Access Logs</TabsTrigger>
@@ -413,10 +413,10 @@ export default function AdminPage() {
                                     <span>{selectedRequestIds.length} request(s) selected</span>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <Button variant="destructive" size="sm" onClick={() => setBulkAction('deny')}>
+                                    <Button variant="destructive" size="sm" onClick={() => setBulkAction('denied')}>
                                         Deny Selected
                                     </Button>
-                                    <Button variant="default" size="sm" onClick={() => setBulkAction('approve')}>
+                                    <Button variant="default" size="sm" onClick={() => setBulkAction('approved')}>
                                         Approve Selected
                                     </Button>
                                 </div>
