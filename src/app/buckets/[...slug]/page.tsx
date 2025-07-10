@@ -36,7 +36,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { CreateFolderDialog } from '@/components/create-folder-dialog';
 import { ViewObjectDialog } from '@/components/view-object-dialog';
@@ -44,6 +43,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { Progress } from '@/components/ui/progress';
+import { AlertDialogTrigger } from '@radix-ui/react-alert-dialog';
 
 
 type InteractingObject = {
@@ -309,6 +309,7 @@ export default function BucketPage() {
     try {
       const res = await fetch(`/api/objects/${bucketName}/${key}`, {
         method: 'PUT',
+        body: '', // Empty body
       });
       if (!res.ok) {
         const error = await res.json();
@@ -397,7 +398,7 @@ export default function BucketPage() {
                     </DropdownMenuContent>
                 </DropdownMenu>
                 <input type="file" ref={fileInputRef} className="hidden" multiple onChange={(e) => uploadFiles(e.target.files)} />
-                <input type="file" ref={folderInputRef} className="hidden" webkitdirectory="" directory="" multiple onChange={(e) => uploadFiles(e.target.files)} />
+                <input type="file" ref={folderInputRef} className="hidden" multiple directory="" webkitdirectory="" onChange={(e) => uploadFiles(e.target.files)} />
               </div>
             )}
         </div>

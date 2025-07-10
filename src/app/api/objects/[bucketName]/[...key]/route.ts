@@ -174,12 +174,12 @@ export async function PUT(
     try {
         const s3Client = await getS3Client(bucketName);
         
-        // This is a folder creation request if the key ends with a slash
+        // Check if this is a folder creation request
         if (objectKey.endsWith('/')) {
             const command = new PutObjectCommand({ 
                 Bucket: bucketName, 
                 Key: objectKey, 
-                Body: '',
+                Body: '', // Zero-byte body for folder creation
             });
             await s3Client.send(command);
             return NextResponse.json({ success: true, message: 'Folder created successfully' });
@@ -202,7 +202,6 @@ export async function PUT(
 
                 return NextResponse.json({ url: signedUrl });
             } catch (error) {
-                 // This error is caught if request.json() fails, which means it's not a valid file upload request.
                  return NextResponse.json({ error: 'Invalid request body. For file uploads, a JSON body with contentType is required.' }, { status: 400 });
             }
         }
