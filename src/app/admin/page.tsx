@@ -261,6 +261,7 @@ export default function AdminPage() {
         fetchNonLogData();
         fetchLogs();
         setSelectedRequestIds([]); // Clear selection
+        setBulkAction(null); // Close the dialog
     }
   };
 
