@@ -24,42 +24,68 @@ const KNOWLEDGE_BASE: { general: Question[]; user: Question[]; admin: Question[]
   general: [
     {
       text: 'What is S3 Commander?',
-      answer: "S3 Commander is a secure web portal for managing access to AWS S3 buckets. Its main goal is to replace static, long-lived AWS credentials with a request/approval workflow for temporary, time-bound access, all while providing a full audit trail."
+      answer: `S3 Commander is a secure web portal for managing access to AWS S3 buckets. Its main goal is to replace static, long-lived AWS credentials with a request/approval workflow for temporary, time-bound access, all while providing a full audit trail for all actions.`
     },
     {
-      text: 'What do the access levels mean?',
-      answer: `There are a few permission types:
-- **Read-Only:** You can view bucket contents and download files. This is the default access level for all visible buckets.
-- **Read/Write:** You can browse, download, upload, and create folders. This can be temporary (via an approved request) or permanent (granted by an admin).
-- **Delete Permission:** This is a separate, permanent permission that allows you to delete files and folders, but only in buckets where you also have Write access.`
+      text: 'What do the different access levels mean?',
+      answer: `Access in S3 Commander is layered. Here's how it works:
+
+- **Read-Only Access:** This is the default permission for all buckets you can see. It allows you to browse folders and view file names, sizes, and modification dates. You cannot download or upload files.
+
+- **Write Access (Read/Write):** This level allows you to upload new files and create folders. You can get this access in two ways:
+  1. **Temporary:** By requesting and receiving approval from an Admin for a specific duration.
+  2. **Permanent:** Granted by an Admin for specific buckets, or all buckets.
+
+- **Delete Permission:** This is a separate, global permission that can only be granted permanently by an Admin. It allows you to delete files and folders, but **only in buckets where you also have Write access** (either temporary or permanent).`
     }
   ],
   user: [
     {
       text: 'How do I get write access to a bucket?',
-      answer: 'On the main Dashboard, find a bucket where you have "Read-Only" access and click the "Request Write" button. Fill out the form explaining why you need access and for how long. An administrator will then review your request.'
+      answer: `On the main Dashboard, find a bucket where your access is "Read-Only". Click the "Request Write" button. You will need to fill out a form explaining why you need write access and for how long. An administrator will then review your request. You can track its status in the "My Activity" section.`
     },
     {
-      text: 'Where can I see my requests and activity?',
-      answer: 'Click on "My Activity" in the sidebar. This page has tabs for your pending requests, your full request history (approved, denied, revoked), and a log of all your file uploads, downloads, and deletions.'
+      text: 'What is the difference between permanent and temporary access?',
+      answer: `- **Temporary Access** is granted through the request/approval system. It is time-bound and expires automatically. This is the standard way to get elevated permissions.
+- **Permanent Access** is granted by an administrator directly. It does not expire and is typically given for buckets you need to access regularly as part of your core duties. You can see your permanent permissions in your user profile details (visible to admins).`
+    },
+    {
+      text: 'Where can I see my requests and file activity?',
+      answer: `Click on the "My Activity" link in the sidebar. This page has three tabs:
+- **Pending Requests:** Shows your active requests that are awaiting a decision.
+- **Request History:** A complete history of all your past requests (approved, denied, revoked).
+- **File Activity:** An audit log of your own actions, such as file uploads, downloads, and deletions.`
     },
   ],
   admin: [
     {
-      text: 'How do I handle access requests?',
-      answer: 'In the "Admin Dashboard", go to the "Pending Requests" tab. You can approve or deny requests from there. You must provide a reason for your decision, which is logged for auditing.'
+      text: 'How do I handle a pending access request?',
+      answer: `Navigate to the "Admin Dashboard" and click the "Pending Requests" tab. Here you will see a list of all requests awaiting a decision. You can Approve or Deny each request. You must provide a clear reason for your decision, as this is recorded in the audit log for compliance.`
     },
     {
-      text: 'How do I grant permanent permissions?',
-      answer: 'Go to the "User Management" tab, click on a user, and then click "Edit Permanent Permissions" in the dialog that appears. This lets you grant permanent write access (to all or specific buckets) and the global permission to delete objects.'
+      text: 'How do I grant permanent permissions to a user?',
+      answer: `1. Go to the "User Management" tab in the Admin Dashboard.
+2. Click on the user you wish to manage. A dialog with their details will appear.
+3. Click the "Edit Permanent Permissions" button.
+4. From here, you can configure their permanent **Write Access** (to all buckets, selective buckets, or none) and toggle their global **Delete Permission**.
+5. You must provide a reason for the change.`
     },
     {
-      text: 'How do I use the audit logs?',
-      answer: 'The "Access Logs" tab on the Admin Dashboard contains a complete audit trail. Use the "+ Add Filter" button to filter by event type, user, and date range. Then click "Apply" to see the results. You can also use the search bar to find logs by keywords like a bucket name, user email, or reason.'
+      text: "How do I revoke a user's active temporary access?",
+      answer: `On the "Active Permissions" tab of the Admin Dashboard, you will see all currently active temporary sessions. Click the "Revoke" button for the permission you want to terminate. This action is immediate and requires a reason for the audit log.`
     },
     {
-      text: 'How do I change a user\'s role?',
-      answer: 'Only the system \'Owner\' can change roles. From the "User Management" tab, click a user to open their details, where you will find options to promote a \'USER\' to \'ADMIN\' or demote an \'ADMIN\' to \'USER\'.'
+      text: 'How do I use the audit logs effectively?',
+      answer: `The "Access Logs" tab is a powerful tool. You can filter the entire history of actions in the system.
+- Use the **"+ Add Filter"** button to narrow results by Event Type (e.g., show only Role Changes), a specific User, or a Date Range.
+- After selecting your filters, you **must click "Apply"** for them to take effect.
+- The **search bar** performs a keyword search across all log details, including user emails, bucket names, and reasons.`
+    },
+    {
+      text: 'What is the difference between an Admin and an Owner?',
+      answer: `Both Admins and Owners have full access to all buckets and can manage user permissions and requests.
+
+The key difference is that **only the Owner** has the ability to change a user's role (i.e., promote a User to an Admin, or demote an Admin to a User). This is a critical security distinction.`
     }
   ],
 };
@@ -68,8 +94,6 @@ const KNOWLEDGE_BASE: { general: Question[]; user: Question[]; admin: Question[]
 export function HelpWidget() {
   const { data: session } = useSession();
   const scrollAreaRef = React.useRef<HTMLDivElement>(null);
-
-  const isAdmin = session?.user?.role === 'admin' || session?.user?.role === 'owner';
   
   const getInitialMessages = (): Message[] => [
     {
@@ -95,14 +119,20 @@ export function HelpWidget() {
   
   React.useEffect(() => {
     if (scrollAreaRef.current) {
-      scrollAreaRef.current.scrollTo({
-        top: scrollAreaRef.current.scrollHeight,
-        behavior: 'smooth'
-      });
+      // Find the viewport element within the ScrollArea
+      const viewport = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
+      if (viewport) {
+        viewport.scrollTo({
+          top: viewport.scrollHeight,
+          behavior: 'smooth'
+        });
+      }
     }
   }, [messages]);
 
   if (!session) return null;
+
+  const isAdmin = session?.user?.role === 'admin' || session?.user?.role === 'owner';
 
   const questionOptions = [
     ...KNOWLEDGE_BASE.general,
@@ -165,12 +195,12 @@ export function HelpWidget() {
             </div>
             <div className="p-3 border-t">
                 <ScrollArea className="h-32">
-                    <div className="flex flex-col items-end gap-2 pr-2">
+                    <div className="flex flex-col items-start gap-2 pr-2">
                         {questionOptions.map((option, index) => (
                             <Button
                                 key={index}
                                 variant="outline"
-                                className="w-full justify-start h-auto py-2"
+                                className="w-full justify-start h-auto py-2 text-left"
                                 onClick={() => handleOptionClick(option)}
                             >
                                 {option.text}
