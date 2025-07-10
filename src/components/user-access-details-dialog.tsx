@@ -10,9 +10,9 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import type { AppUser } from '@/lib/types';
+import type { AppUser, AllUserPermissions } from '@/lib/types';
 import { toast } from '@/hooks/use-toast';
-import { Loader2, KeyRound, Timer, ShieldCheck, HardDrive, Info } from 'lucide-react';
+import { Loader2, KeyRound, Timer, ShieldCheck, HardDrive, Info, Edit, Trash2, Globe, CheckCircle, XCircle } from 'lucide-react';
 import { format, parseISO, formatDistanceToNow } from 'date-fns';
 
 interface UserAccessDetailsDialogProps {
@@ -20,17 +20,8 @@ interface UserAccessDetailsDialogProps {
   onOpenChange: (isOpen: boolean) => void;
 }
 
-type UserPermissions = {
-  permanent: string[];
-  temporary: {
-    bucketName: string;
-    region?: string;
-    expiresAt: string | null;
-  }[];
-};
-
 export function UserAccessDetailsDialog({ user, onOpenChange }: UserAccessDetailsDialogProps) {
-  const [permissions, setPermissions] = useState<UserPermissions | null>(null);
+  const [permissions, setPermissions] = useState<AllUserPermissions | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const isOpen = !!user;
   
@@ -86,7 +77,12 @@ export function UserAccessDetailsDialog({ user, onOpenChange }: UserAccessDetail
         );
     }
 
-    if (!permissions || (!permissions.permanent.length && !permissions.temporary.length)) {
+    const permanent = permissions?.permanent;
+    const temporary = permissions?.temporary;
+    const hasPermanent = permanent && (permanent.write.access !== 'none' || permanent.canDelete);
+    const hasTemporary = temporary && temporary.length > 0;
+
+    if (!hasPermanent && !hasTemporary) {
         return (
             <div className="text-center text-muted-foreground py-10">
               This user has no assigned permissions.
@@ -96,26 +92,55 @@ export function UserAccessDetailsDialog({ user, onOpenChange }: UserAccessDetail
 
     return (
         <div className="space-y-6 py-2">
-          {permissions.permanent.length > 0 && (
+          {/* Permanent Permissions */}
+          {hasPermanent && permanent && (
             <div>
-              <h3 className="font-semibold flex items-center gap-2 mb-2"><ShieldCheck className="h-4 w-4 text-green-500" /> Permanent Access</h3>
-              <div className="space-y-2 p-3 border rounded-lg">
-                {permissions.permanent.map(bucketName => (
-                  <div key={bucketName} className="flex items-center gap-2 text-sm">
-                    <HardDrive className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-medium">{bucketName}</span>
+              <h3 className="font-semibold flex items-center gap-2 mb-2"><ShieldCheck className="h-5 w-5 text-primary" /> Permanent Permissions</h3>
+              <div className="space-y-4 p-4 border rounded-lg">
+                {/* Write Access */}
+                <div className="flex items-start gap-3">
+                  <Edit className="h-5 w-5 mt-0.5 text-muted-foreground" />
+                  <div>
+                    <h4 className="font-medium">Write Access</h4>
+                    {permanent.write.access === 'none' && <p className="text-sm text-muted-foreground">No permanent write access.</p>}
+                    {permanent.write.access === 'all' && (
+                      <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+                        <Globe className="h-4 w-4" /> <span>All Buckets</span>
+                      </div>
+                    )}
+                    {permanent.write.access === 'selective' && (
+                      <div className="text-sm">
+                        <p className="text-muted-foreground mb-1">Selective access to:</p>
+                        <ul className="list-disc pl-5 space-y-1">
+                          {permanent.write.buckets.map(bucket => <li key={bucket}>{bucket}</li>)}
+                        </ul>
+                      </div>
+                    )}
                   </div>
-                ))}
+                </div>
+
+                {/* Delete Access */}
+                <div className="flex items-start gap-3">
+                  <Trash2 className="h-5 w-5 mt-0.5 text-muted-foreground" />
+                  <div>
+                    <h4 className="font-medium">Delete Permission</h4>
+                    <div className={`flex items-center gap-2 text-sm ${permanent.canDelete ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                      {permanent.canDelete ? <CheckCircle className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
+                      <span>{permanent.canDelete ? 'Enabled' : 'Disabled'}</span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           )}
 
-          {permissions.temporary.length > 0 && (
+          {/* Temporary Permissions */}
+          {hasTemporary && temporary && (
             <div>
-              <h3 className="font-semibold flex items-center gap-2 mb-2"><Timer className="h-4 w-4 text-orange-500" /> Temporary Access</h3>
+              <h3 className="font-semibold flex items-center gap-2 mb-2"><Timer className="h-5 w-5 text-orange-500" /> Temporary Access</h3>
               <div className="space-y-2 p-3 border rounded-lg">
-                {permissions.temporary.map(access => (
-                  <div key={access.bucketName} className="flex items-center justify-between text-sm">
+                {temporary.map(access => (
+                  <div key={access.bucketName} className="flex items-center justify-between text-sm p-2 rounded-md hover:bg-muted/50">
                     <div className="flex items-center gap-2">
                       <HardDrive className="h-4 w-4 text-muted-foreground" />
                       <div>

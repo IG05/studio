@@ -4,7 +4,7 @@ import type { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { connectToDatabase, fromMongo } from '@/lib/mongodb';
-import type { AccessRequest } from '@/lib/types';
+import type { AccessRequest, UserPermissions } from '@/lib/types';
 
 export async function GET(
     request: NextRequest,
@@ -22,7 +22,10 @@ export async function GET(
 
         // Fetch permanent permissions
         const permDoc = await db.collection('permissions').findOne({ userId: userId });
-        const permanentBuckets = permDoc?.buckets || [];
+        const permanentPermissions: UserPermissions = {
+            write: permDoc?.write || { access: 'none', buckets: [] },
+            canDelete: permDoc?.canDelete || false,
+        };
 
         // Fetch active temporary permissions
         const activeTempRequestsCursor = db.collection('accessRequests').find({
@@ -35,7 +38,7 @@ export async function GET(
         const temporaryAccess = activeTempRequestsFromDb.map(fromMongo) as AccessRequest[];
 
         const responsePayload = {
-            permanent: permanentBuckets,
+            permanent: permanentPermissions,
             temporary: temporaryAccess.map(req => ({
                 bucketName: req.bucketName,
                 expiresAt: req.expiresAt,

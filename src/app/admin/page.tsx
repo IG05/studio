@@ -556,14 +556,15 @@ const UsersTable = ({ users, onRoleChange, onAssignBuckets, onUserClick, isLoadi
                     ) : users.length === 0 ? (
                         <TableRow><TableCell colSpan={3} className="h-24 text-center">No users found.</TableCell></TableRow>
                     ) : users.map((user) => (
-                        <TableRow key={user.id}>
+                        <TableRow key={user.id} className="group">
                             <TableCell>
-                                <div className="flex items-center gap-3">
-                                <button className="flex items-center gap-3 text-left hover:underline" onClick={() => onUserClick(user)}>
+                                <button className="flex items-center gap-3 text-left group-hover:underline" onClick={() => onUserClick(user)}>
                                     <Avatar><AvatarImage src={user.image || ''} alt={user.name || ''} /><AvatarFallback>{user.name?.charAt(0)}</AvatarFallback></Avatar>
-                                    <div><div className="font-medium">{user.name}</div><div className="text-sm text-muted-foreground">{user.email}</div></div>
+                                    <div>
+                                        <div className="font-medium">{user.name}</div>
+                                        <div className="text-sm text-muted-foreground">{user.email}</div>
+                                    </div>
                                 </button>
-                                </div>
                             </TableCell>
                             <TableCell>
                                 <Badge variant={user.role === 'USER' ? 'secondary' : 'default'} className="capitalize">
@@ -579,9 +580,6 @@ const UsersTable = ({ users, onRoleChange, onAssignBuckets, onUserClick, isLoadi
                                         </Button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent>
-                                        <DropdownMenuItem onSelect={() => onUserClick(user)}>
-                                            <UserRoundCheck className="mr-2 h-4 w-4" /> View Permissions
-                                        </DropdownMenuItem>
                                         {isOwner && (
                                             <>
                                                 <DropdownMenuItem onClick={() => onRoleChange(user, 'ADMIN')} disabled={user.role === 'ADMIN'}>

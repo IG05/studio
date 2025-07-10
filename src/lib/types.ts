@@ -102,3 +102,12 @@ export type UserPermissions = {
   };
   canDelete: boolean;
 };
+
+export type AllUserPermissions = {
+  permanent: UserPermissions;
+  temporary: {
+    bucketName: string;
+    region?: string;
+    expiresAt: string | null;
+  }[];
+};
