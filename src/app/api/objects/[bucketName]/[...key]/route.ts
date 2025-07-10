@@ -8,6 +8,7 @@ import { authOptions } from '@/lib/auth';
 import type { S3CommanderUser } from '@/lib/types';
 import { connectToDatabase } from '@/lib/mongodb';
 import { isAfter } from 'date-fns';
+import { Readable } from 'stream';
 
 async function checkWriteAccess(user: S3CommanderUser, bucketName: string): Promise<boolean> {
     if (['admin', 'owner'].includes(user.role)) {
@@ -154,7 +155,7 @@ export async function DELETE(
     }
 }
 
-// PUT handler for generating presigned upload URLs and creating folders
+// PUT handler for creating folders.
 export async function PUT(
     request: NextRequest,
     context: { params: { bucketName: string; key: string[] } }
@@ -172,48 +173,70 @@ export async function PUT(
     if (!hasAccess) {
         return NextResponse.json({ error: 'Forbidden: Write access required.' }, { status: 403 });
     }
-    
-    const s3Client = await getS3Client(bucketName);
 
-    // If key ends with '/', it's a folder creation request.
-    if (objectKey.endsWith('/')) {
-        try {
-            const command = new PutObjectCommand({ 
-                Bucket: bucketName, 
-                Key: objectKey,
-                Body: '', // Zero-byte body for folder creation
-            });
-            await s3Client.send(command);
-            return NextResponse.json({ success: true, message: 'Folder created successfully' });
-        } catch (error: any) {
-             console.error(`Failed to create folder ${objectKey} in bucket ${bucketName}:`, error);
-             return NextResponse.json({ error: 'Failed to create folder.' }, { status: 500 });
-        }
-    } else {
-        // Otherwise, it's a file upload request, which requires a JSON body with contentType.
-        try {
-            const body = await request.json();
-            const contentType = body.contentType;
+    // This route is ONLY for folder creation. It must end with a slash.
+    if (!objectKey.endsWith('/')) {
+        return NextResponse.json({ error: 'Invalid request for folder creation.' }, { status: 400 });
+    }
 
-            if (!contentType) {
-                return NextResponse.json({ error: 'Content-Type is required for file uploads.' }, { status: 400 });
-            }
+    try {
+        const s3Client = await getS3Client(bucketName);
+        const command = new PutObjectCommand({ 
+            Bucket: bucketName, 
+            Key: objectKey,
+            Body: '', // Zero-byte body for folder creation
+        });
+        await s3Client.send(command);
+        return NextResponse.json({ success: true, message: 'Folder created successfully' });
+    } catch (error: any) {
+         console.error(`Failed to create folder ${objectKey} in bucket ${bucketName}:`, error);
+         return NextResponse.json({ error: 'Failed to create folder.' }, { status: 500 });
+    }
+}
 
-            const command = new PutObjectCommand({ 
-                Bucket: bucketName, 
-                Key: objectKey,
-                ContentType: contentType,
-            });
-            const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 300 }); // 5 minute expiry
 
-            return NextResponse.json({ url: signedUrl });
-        } catch (error: any) {
-            console.error(`Failed to process presigned URL for ${objectKey} in bucket ${bucketName}:`, error);
-            // This catches JSON parsing errors for folder creation attempts if frontend sends empty body
-            if (error instanceof SyntaxError) {
-                 return NextResponse.json({ error: 'Invalid request body. For file uploads, a JSON body with contentType is required.' }, { status: 400 });
-            }
-            return NextResponse.json({ error: 'Failed to create presigned URL.' }, { status: 500 });
-        }
+// POST handler for proxied file uploads.
+export async function POST(
+    request: NextRequest,
+    context: { params: { bucketName: string; key: string[] } }
+) {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id || !session.user.role) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const user = session.user as S3CommanderUser;
+    const { bucketName } = context.params;
+    const objectKey = decodeURIComponent(context.params.key.join('/'));
+
+    const hasAccess = await checkWriteAccess(user, bucketName);
+    if (!hasAccess) {
+        return NextResponse.json({ error: 'Forbidden: Write access required.' }, { status: 403 });
+    }
+
+    if (!request.body) {
+        return NextResponse.json({ error: 'Request body is missing.' }, { status: 400 });
+    }
+
+    try {
+        const s3Client = await getS3Client(bucketName);
+        
+        const contentType = request.headers.get('content-type');
+        const contentLength = request.headers.get('content-length');
+
+        const command = new PutObjectCommand({ 
+            Bucket: bucketName, 
+            Key: objectKey,
+            Body: request.body as unknown as Readable,
+            ContentType: contentType || undefined,
+            ContentLength: contentLength ? parseInt(contentLength, 10) : undefined,
+        });
+
+        await s3Client.send(command);
+
+        return NextResponse.json({ success: true, message: 'File uploaded successfully' });
+    } catch (error: any) {
+        console.error(`Failed to upload file ${objectKey} in bucket ${bucketName}:`, error);
+        return NextResponse.json({ error: 'Failed to upload file.' }, { status: 500 });
     }
 }

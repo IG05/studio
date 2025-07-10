@@ -43,8 +43,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { Progress } from '@/components/ui/progress';
-import { AlertDialogTrigger } from '@radix-ui/react-alert-dialog';
-
 
 type InteractingObject = {
     key: string;
@@ -80,7 +78,7 @@ export default function BucketPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
   
-  const path = useMemo(() => pathParts.join('/'), [pathParts]);
+  const path = useMemo(() => pathParts.map(part => decodeURIComponent(part)).join('/'), [pathParts]);
   const currentPrefix = useMemo(() => (path ? path + '/' : ''), [path]);
 
   const fetchObjects = () => {
@@ -119,11 +117,12 @@ export default function BucketPage() {
 
   const breadcrumbs = useMemo(() => {
     if (!bucketName) return [];
+    const decodedPathParts = pathParts.map(part => decodeURIComponent(part));
     return [
       { name: bucketName, href: `/buckets/${bucketName}` },
-      ...pathParts.map((part, i) => ({
+      ...decodedPathParts.map((part, i) => ({
         name: part,
-        href: `/buckets/${bucketName}/${pathParts.slice(0, i + 1).join('/')}`,
+        href: `/buckets/${bucketName}/${decodedPathParts.slice(0, i + 1).join('/')}`,
       })),
     ];
   }, [bucketName, pathParts]);
@@ -242,8 +241,7 @@ export default function BucketPage() {
   const uploadFileWithProgress = (url: string, file: File, onProgress: (progress: number) => void) => {
     return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
-        xhr.open('PUT', url, true);
-        xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+        xhr.open('POST', url, true);
         
         xhr.upload.onprogress = (event) => {
             if (event.lengthComputable) {
@@ -257,15 +255,23 @@ export default function BucketPage() {
                 onProgress(100);
                 resolve(xhr.response);
             } else {
-                reject(new Error(`Upload failed with status: ${xhr.status} ${xhr.statusText}`));
+                try {
+                    const error = JSON.parse(xhr.responseText);
+                    reject(new Error(error.error || `Upload failed with status: ${xhr.status} ${xhr.statusText}`));
+                } catch {
+                    reject(new Error(`Upload failed with status: ${xhr.status} ${xhr.statusText}`));
+                }
             }
         };
 
         xhr.onerror = () => {
             reject(new Error('Upload failed due to a network error.'));
         };
-
-        xhr.send(file);
+        
+        // We no longer need to set content-type here, the browser will do it for FormData
+        const formData = new FormData();
+        formData.append('file', file);
+        xhr.send(formData);
     });
   }
 
@@ -280,47 +286,25 @@ export default function BucketPage() {
         individualProgress: 0,
     });
 
-    for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        // webkitRelativePath is a browser-specific property for folder uploads
+    const fileArray = Array.from(files);
+
+    for (let i = 0; i < fileArray.length; i++) {
+        const file = fileArray[i];
         const relativePath = (file as any).webkitRelativePath || file.name;
         const key = `${currentPrefix}${relativePath}`;
-        
-        if ((file as any).webkitRelativePath && file.size === 0 && !key.endsWith('/')) {
-            // Skip dummy zero-byte files that some browsers create for folders
-            // but ensure we still try to create the folder if needed
-             try {
-                await handleCreateFolder(relativePath.substring(0, relativePath.lastIndexOf('/') + 1), true);
-            } catch (e) {
-                 // May fail if folder already exists, which is fine
-            }
-            continue;
-        }
 
         setUploadProgress(prev => ({
             ...prev!,
             fileName: file.name,
             currentFileNumber: i + 1,
-            overallProgress: (i / files.length) * 100,
+            overallProgress: (i / fileArray.length) * 100,
             individualProgress: 0
         }));
 
         try {
-            // Get presigned URL
-            const presignedRes = await fetch(`/api/objects/${bucketName}/${encodeURIComponent(key)}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ contentType: file.type || 'application/octet-stream' }),
-            });
-
-            if (!presignedRes.ok) {
-                const data = await presignedRes.json();
-                throw new Error(data.error || `Could not get upload URL for ${file.name}.`);
-            }
-            const { url } = await presignedRes.json();
-
-            // Upload the actual file to the received presigned URL with progress tracking
-            await uploadFileWithProgress(url, file, (progress) => {
+            const apiUrl = `/api/objects/${bucketName}/${encodeURIComponent(key)}`;
+            
+            await uploadFileWithProgress(apiUrl, file, (progress) => {
                  setUploadProgress(prev => prev ? ({ ...prev, individualProgress: progress }) : null);
             });
 
@@ -341,8 +325,13 @@ export default function BucketPage() {
     fetchObjects();
   };
 
-  const handleCreateFolder = async (folderName: string, fromUpload = false) => {
-      const key = folderName.endsWith('/') ? `${currentPrefix}${folderName}` : `${currentPrefix}${folderName}/`;
+  const handleCreateFolder = async (folderName: string) => {
+      // Ensure folderName doesn't have slashes from user input
+      if (folderName.includes('/')) {
+        toast({ title: "Invalid Name", description: "Folder name cannot contain slashes.", variant: "destructive" });
+        return;
+      }
+      const key = `${currentPrefix}${folderName}/`;
       setInteractingObject({ key, action: 'create-folder'});
 
       try {
@@ -350,32 +339,18 @@ export default function BucketPage() {
               method: 'PUT',
           });
           if (!res.ok) {
-              let errorMsg = "Could not create folder.";
-              try {
-                  const errorData = await res.json();
-                  errorMsg = errorData.error || errorMsg;
-              } catch (e) {
-                   console.log("Response for create folder was not JSON.", await res.text());
-              }
-              throw new Error(errorMsg);
+              const errorData = await res.json();
+              throw new Error(errorData.error || "Could not create folder.");
           }
-          if (!fromUpload) {
-            toast({ title: "Folder Created", description: `Folder "${folderName}" created successfully.` });
-            fetchObjects();
-          }
+          toast({ title: "Folder Created", description: `Folder "${folderName}" created successfully.` });
+          fetchObjects();
       } catch (err: any) {
           console.error("Create folder failed", err);
-          if (!fromUpload) {
-            toast({
-                title: 'Create Folder Error',
-                description: err.message || 'Could not create the folder.',
-                variant: 'destructive',
-            });
-          } else {
-             // Silently fail if creating a folder during an upload fails
-             // (e.g., it likely already exists, which is fine)
-             console.warn(`Could not create folder structure during upload: ${key}`);
-          }
+          toast({
+              title: 'Create Folder Error',
+              description: err.message || 'Could not create the folder.',
+              variant: 'destructive',
+          });
       } finally {
           setInteractingObject(null);
       }
@@ -620,3 +595,4 @@ export default function BucketPage() {
     </>
   );
 }
+
