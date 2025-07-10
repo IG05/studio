@@ -154,6 +154,7 @@ export async function DELETE(
     
     try {
         const s3Client = await getS3Client(bucketName);
+        const { db } = await connectToDatabase();
         
         // If key ends with '/', it's a folder deletion request
         if (objectKey.endsWith('/')) {
@@ -167,21 +168,32 @@ export async function DELETE(
                  // Even if the folder is empty, we might need to delete the placeholder object.
                 const deletePlaceholder = new DeleteObjectCommand({ Bucket: bucketName, Key: objectKey });
                 await s3Client.send(deletePlaceholder);
-                return NextResponse.json({ success: true, message: 'Empty folder deleted successfully' });
+            } else {
+                 const deleteParams = {
+                    Bucket: bucketName,
+                    Delete: { Objects: listedObjects.Contents.map(({ Key }) => ({ Key })) },
+                };
+                await s3Client.send(new DeleteObjectsCommand(deleteParams));
             }
-
-            const deleteParams = {
-                Bucket: bucketName,
-                Delete: { Objects: listedObjects.Contents.map(({ Key }) => ({ Key })) },
-            };
-            
-            await s3Client.send(new DeleteObjectsCommand(deleteParams));
-            
+             await db.collection('auditLogs').insertOne({
+                timestamp: new Date(),
+                eventType: 'OBJECT_DELETE',
+                actor: { userId: user.id, email: user.email },
+                target: { bucketName, objectKey },
+                details: { type: 'folder' }
+            });
             return NextResponse.json({ success: true, message: 'Folder and its contents deleted successfully' });
 
         } else { // It's a single file deletion
             const command = new DeleteObjectCommand({ Bucket: bucketName, Key: objectKey });
             await s3Client.send(command);
+             await db.collection('auditLogs').insertOne({
+                timestamp: new Date(),
+                eventType: 'OBJECT_DELETE',
+                actor: { userId: user.id, email: user.email },
+                target: { bucketName, objectKey },
+                details: { type: 'file' }
+            });
             return NextResponse.json({ success: true, message: 'Object deleted successfully' });
         }
 
@@ -223,6 +235,16 @@ export async function PUT(
             Body: '', // Zero-byte body for folder creation
         });
         await s3Client.send(command);
+
+        const { db } = await connectToDatabase();
+        await db.collection('auditLogs').insertOne({
+            timestamp: new Date(),
+            eventType: 'FOLDER_CREATE',
+            actor: { userId: user.id, email: user.email },
+            target: { bucketName, objectKey },
+            details: {}
+        });
+
         return NextResponse.json({ success: true, message: 'Folder created successfully' });
     } catch (error: any) {
          console.error(`Failed to create folder ${objectKey} in bucket ${bucketName}:`, error);
@@ -271,6 +293,18 @@ export async function POST(
         });
 
         await s3Client.send(command);
+
+        const { db } = await connectToDatabase();
+        await db.collection('auditLogs').insertOne({
+            timestamp: new Date(),
+            eventType: 'FILE_UPLOAD',
+            actor: { userId: user.id, email: user.email },
+            target: { bucketName, objectKey },
+            details: {
+                size: file.size,
+                contentType: file.type,
+            }
+        });
 
         return NextResponse.json({ success: true, message: 'File uploaded successfully' });
     } catch (error: any) {

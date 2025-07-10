@@ -15,14 +15,17 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Header } from '@/components/header';
 import type { AccessRequest, AppUser, AuditLog, Bucket } from '@/lib/types';
-import { format, parseISO, formatDistanceToNow } from 'date-fns';
+import { format, parseISO, formatDistanceToNow, subDays } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
-import { CheckCircle, XCircle, MoreVertical, ShieldCheck, User as UserIcon, Check, KeyRound, Crown, Search, FileCheck, UserCog, Eye, HardDrive, ShieldOff, Slash, UserRoundCheck } from 'lucide-react';
+import { CheckCircle, XCircle, MoreVertical, ShieldCheck, User as UserIcon, Check, KeyRound, Crown, Search, FileCheck, UserCog, Eye, HardDrive, ShieldOff, Slash, UserRoundCheck, FileUp, FolderPlus, Trash2, CalendarIcon, FilterX } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuCheckboxItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu';
 import {
     Tabs,
@@ -38,16 +41,23 @@ import { useSession } from 'next-auth/react';
 import { AssignBucketsDialog } from '@/components/assign-buckets-dialog';
 import { Input } from '@/components/ui/input';
 import { RequestDetailsDialog } from '@/components/request-details-dialog';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-  } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { RevokeAccessDialog } from '@/components/revoke-access-dialog';
 import { UserAccessDetailsDialog } from '@/components/user-access-details-dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import type { DateRange } from 'react-day-picker';
+import { ScrollArea } from '@/components/ui/scroll-area';
+
+const ALL_EVENT_TYPES: AuditLog['eventType'][] = [
+    'ACCESS_REQUEST_DECISION',
+    'ACCESS_REVOKED',
+    'ROLE_CHANGE',
+    'PERMISSIONS_CHANGE',
+    'FILE_UPLOAD',
+    'FOLDER_CREATE',
+    'OBJECT_DELETE'
+];
 
 export default function AdminPage() {
   const { data: session } = useSession();
@@ -64,38 +74,44 @@ export default function AdminPage() {
   const [roleChangeCandidate, setRoleChangeCandidate] = React.useState<{ user: AppUser; role: 'ADMIN' | 'USER' } | null>(null);
   const [permissionUser, setPermissionUser] = React.useState<AppUser | null>(null);
   const [userSearchQuery, setUserSearchQuery] = React.useState('');
-  const [logFilter, setLogFilter] = React.useState('all');
+  
+  const [logFilters, setLogFilters] = React.useState({
+    eventTypes: [] as string[],
+    userId: null as string | null,
+    dateRange: {
+      from: subDays(new Date(), 30),
+      to: new Date()
+    } as DateRange | undefined,
+  });
+
   const [viewingRequest, setViewingRequest] = React.useState<AccessRequest | null>(null);
   const [viewingUserAccess, setViewingUserAccess] = React.useState<AppUser | null>(null);
   const [isDialogLoading, setIsDialogLoading] = React.useState(false);
+  const [isLogsLoading, setIsLogsLoading] = React.useState(true);
 
-  const fetchAllData = React.useCallback(async () => {
+  const fetchNonLogData = React.useCallback(async () => {
     setIsLoading(true);
     try {
-      const [requestsRes, usersRes, logsRes, bucketsRes, activeRequestsRes] = await Promise.all([
+      const [requestsRes, usersRes, bucketsRes, activeRequestsRes] = await Promise.all([
         fetch('/api/access-requests'),
         fetch('/api/users'),
-        fetch('/api/audit-logs'),
         fetch('/api/buckets'),
         fetch('/api/access-requests/active'),
       ]);
 
       const requestsData = await requestsRes.json();
       const usersData = await usersRes.json();
-      const logsData = await logsRes.json();
       const bucketsData = await bucketsRes.json();
       const activeRequestsData = await activeRequestsRes.json();
       
       if (!requestsRes.ok) throw new Error(requestsData.error || 'Failed to fetch access requests.');
       if (!usersRes.ok) throw new Error(usersData.error || 'Failed to fetch users.');
-      if (!logsRes.ok) throw new Error(logsData.error || 'Failed to fetch logs.');
       if (!bucketsRes.ok) throw new Error(bucketsData.error || 'Failed to fetch buckets.');
       if (!activeRequestsRes.ok) throw new Error(activeRequestsData.error || 'Failed to fetch active requests.');
 
       setRequests(Array.isArray(requestsData) ? requestsData : []);
       setActiveRequests(Array.isArray(activeRequestsData) ? activeRequestsData : []);
       setUsers(Array.isArray(usersData) ? usersData : []);
-      setLogs(Array.isArray(logsData) ? logsData : []);
       setBuckets(Array.isArray(bucketsData) ? bucketsData : []);
 
     } catch (err: any) {
@@ -103,7 +119,6 @@ export default function AdminPage() {
       setRequests([]);
       setActiveRequests([]);
       setUsers([]);
-      setLogs([]);
       setBuckets([]);
       toast({
         title: 'Error',
@@ -115,9 +130,43 @@ export default function AdminPage() {
     }
   }, []);
 
+  const fetchLogs = React.useCallback(async () => {
+    setIsLogsLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (logFilters.eventTypes.length > 0) {
+        params.append('eventTypes', logFilters.eventTypes.join(','));
+      }
+      if (logFilters.userId) {
+        params.append('userId', logFilters.userId);
+      }
+      if (logFilters.dateRange?.from) {
+        params.append('startDate', logFilters.dateRange.from.toISOString());
+      }
+      if (logFilters.dateRange?.to) {
+        params.append('endDate', logFilters.dateRange.to.toISOString());
+      }
+
+      const res = await fetch(`/api/audit-logs?${params.toString()}`);
+      const logsData = await res.json();
+      if (!res.ok) throw new Error(logsData.error || 'Failed to fetch logs.');
+
+      setLogs(Array.isArray(logsData) ? logsData : []);
+
+    } catch(err: any) {
+        console.error("Failed to fetch logs", err);
+        setLogs([]);
+        toast({ title: 'Error', description: err.message || 'Could not fetch audit logs.', variant: 'destructive' });
+    } finally {
+        setIsLogsLoading(false);
+    }
+  }, [logFilters]);
+
   React.useEffect(() => {
-    fetchAllData();
-  }, [fetchAllData]);
+    fetchNonLogData();
+    fetchLogs();
+  }, [fetchNonLogData, fetchLogs]);
+
 
   const handleRequest = (requestId: string, status: 'approved' | 'denied' | 'revoked', reason: string) => {
     fetch(`/api/access-requests/${requestId}`, {
@@ -134,7 +183,8 @@ export default function AdminPage() {
             title: `Request ${status}`,
             description: `The access request has been successfully ${status}.`,
         });
-        fetchAllData(); // Refetch all data to ensure consistency
+        fetchNonLogData(); // Refetch all data to ensure consistency
+        fetchLogs(); // also refetch logs
     })
     .catch(async (err) => {
         const error = await err;
@@ -178,7 +228,8 @@ export default function AdminPage() {
             title: 'User Updated',
             description: `User role has been successfully changed to ${role}.`,
         });
-        fetchAllData(); // Refetch all data
+        fetchNonLogData(); // Refetch all data
+        fetchLogs();
         setViewingUserAccess(null); // Close the dialog
     })
     .catch(async (err) => {
@@ -196,7 +247,19 @@ export default function AdminPage() {
   };
 
   const handlePermissionsChange = () => {
-    fetchAllData();
+    fetchNonLogData();
+    fetchLogs();
+  };
+  
+  const handleClearFilters = () => {
+    setLogFilters({
+      eventTypes: [],
+      userId: null,
+      dateRange: {
+        from: subDays(new Date(), 30),
+        to: new Date()
+      },
+    });
   };
 
   const filteredRequests = requests.filter(req => req.status === 'pending');
@@ -209,13 +272,10 @@ export default function AdminPage() {
     );
   }, [users, userSearchQuery]);
 
-  const filteredLogs = React.useMemo(() => {
-    if (logFilter === 'all') return logs;
-    return logs.filter(log => log.eventType === logFilter);
-  }, [logs, logFilter]);
-
   const adminCount = React.useMemo(() => users.filter(u => u.role === 'ADMIN' || u.role === 'OWNER').length, [users]);
   const standardUserCount = React.useMemo(() => users.filter(u => u.role === 'USER').length, [users]);
+
+  const isFilterActive = logFilters.eventTypes.length > 0 || !!logFilters.userId;
 
   return (
     <>
@@ -310,21 +370,17 @@ export default function AdminPage() {
                       <UsersTable users={filteredUsers} onAssignBuckets={setPermissionUser} onUserClick={setViewingUserAccess} isLoading={isLoading} />
                   </TabsContent>
                   <TabsContent value="logs" className="mt-4">
-                      <div className="flex justify-end mb-4">
-                        <Select value={logFilter} onValueChange={setLogFilter}>
-                          <SelectTrigger className="w-full sm:w-[280px]">
-                            <SelectValue placeholder="Filter by event type..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">All Events</SelectItem>
-                            <SelectItem value="ACCESS_REQUEST_DECISION">Access Request Decisions</SelectItem>
-                            <SelectItem value="ACCESS_REVOKED">Access Revocations</SelectItem>
-                            <SelectItem value="ROLE_CHANGE">Role Changes</SelectItem>
-                            <SelectItem value="PERMISSIONS_CHANGE">Permissions Changes</SelectItem>
-                          </SelectContent>
-                        </Select>
+                      <div className="flex flex-col sm:flex-row gap-2 mb-4">
+                        <UserFilter users={users} selectedUser={logFilters.userId} onUserChange={(userId) => setLogFilters(f => ({...f, userId}))} />
+                        <EventTypeFilter selectedTypes={logFilters.eventTypes} onTypeChange={(types) => setLogFilters(f => ({...f, eventTypes: types}))} />
+                        <DateRangeFilter dateRange={logFilters.dateRange} onDateChange={(range) => setLogFilters(f => ({...f, dateRange: range}))} />
+                        {isFilterActive && (
+                            <Button variant="ghost" onClick={handleClearFilters}>
+                                <FilterX className="mr-2 h-4 w-4" /> Clear
+                            </Button>
+                        )}
                       </div>
-                      <LogsTable logs={filteredLogs} isLoading={isLoading} onViewDetails={handleViewDetails} />
+                      <LogsTable logs={logs} isLoading={isLogsLoading} onViewDetails={handleViewDetails} />
                   </TabsContent>
               </Tabs>
           </div>
@@ -429,6 +485,9 @@ const LogsTable = ({ logs, isLoading, onViewDetails }: { logs: AuditLog[], isLoa
             case 'ACCESS_REVOKED': return <ShieldOff className="h-5 w-5 text-purple-500" />;
             case 'ROLE_CHANGE': return <UserCog className="h-5 w-5 text-blue-500" />;
             case 'PERMISSIONS_CHANGE': return <KeyRound className="h-5 w-5 text-yellow-500" />;
+            case 'FILE_UPLOAD': return <FileUp className="h-5 w-5 text-green-500" />;
+            case 'FOLDER_CREATE': return <FolderPlus className="h-5 w-5 text-green-500" />;
+            case 'OBJECT_DELETE': return <Trash2 className="h-5 w-5 text-red-500" />;
             default: return null;
         }
     };
@@ -490,6 +549,19 @@ const LogsTable = ({ logs, isLoading, onViewDetails }: { logs: AuditLog[], isLoa
                         {reasonHtml}
                     </div>
                 );
+            case 'FILE_UPLOAD':
+            case 'FOLDER_CREATE':
+            case 'OBJECT_DELETE':
+                return (
+                    <div>
+                        <div>
+                            <span>{log.eventType === 'FILE_UPLOAD' ? 'Uploaded file' : log.eventType === 'FOLDER_CREATE' ? 'Created folder' : 'Deleted object'} </span>
+                            <span className="font-mono text-xs bg-muted px-1 py-0.5 rounded">{log.target.objectKey}</span>
+                            <span> in bucket </span>
+                            <span className="font-semibold">{log.target.bucketName}</span>.
+                        </div>
+                    </div>
+                );
             default:
                 return <pre className="text-xs">{JSON.stringify(log.details, null, 2)}</pre>;
         }
@@ -511,7 +583,7 @@ const LogsTable = ({ logs, isLoading, onViewDetails }: { logs: AuditLog[], isLoa
                 {isLoading ? (
                     Array.from({ length: 5 }).map((_, i) => (<TableRow key={i}><TableCell colSpan={5}><Skeleton className="h-8 w-full" /></TableCell></TableRow>))
                 ) : logs.length === 0 ? (
-                    <TableRow><TableCell colSpan={5} className="h-24 text-center">No logs found for this filter.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={5} className="h-24 text-center">No logs found for the selected filters.</TableCell></TableRow>
                 ) : logs.map((log) => (
                     <TableRow key={log.id}>
                     <TableCell><div className="flex justify-center">{renderEventIcon(log.eventType)}</div></TableCell>
@@ -600,3 +672,110 @@ const UsersTable = ({ users, onAssignBuckets, onUserClick, isLoading }: { users:
         </div>
     )
 };
+
+function EventTypeFilter({ selectedTypes, onTypeChange }: { selectedTypes: string[], onTypeChange: (types: string[]) => void }) {
+    const eventTypeLabels: Record<string, string> = {
+        'ACCESS_REQUEST_DECISION': 'Access Decisions',
+        'ACCESS_REVOKED': 'Access Revocations',
+        'ROLE_CHANGE': 'Role Changes',
+        'PERMISSIONS_CHANGE': 'Permissions Changes',
+        'FILE_UPLOAD': 'File Uploads',
+        'FOLDER_CREATE': 'Folder Creations',
+        'OBJECT_DELETE': 'Object Deletions'
+    };
+    
+    return (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="w-full sm:w-auto">
+                    Event Type ({selectedTypes.length > 0 ? selectedTypes.length : 'All'})
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-64">
+                <DropdownMenuLabel>Filter by Event Type</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {ALL_EVENT_TYPES.map(type => (
+                    <DropdownMenuCheckboxItem
+                        key={type}
+                        checked={selectedTypes.includes(type)}
+                        onCheckedChange={(checked) => {
+                            const newTypes = checked
+                                ? [...selectedTypes, type]
+                                : selectedTypes.filter(t => t !== type);
+                            onTypeChange(newTypes);
+                        }}
+                    >
+                        {eventTypeLabels[type] || type}
+                    </DropdownMenuCheckboxItem>
+                ))}
+            </DropdownMenuContent>
+        </DropdownMenu>
+    );
+}
+
+function UserFilter({ users, selectedUser, onUserChange }: { users: AppUser[], selectedUser: string | null, onUserChange: (userId: string | null) => void }) {
+    const [open, setOpen] = React.useState(false);
+    const [search, setSearch] = React.useState('');
+
+    const filteredUsers = users.filter(user => user.name?.toLowerCase().includes(search.toLowerCase()) || user.email?.toLowerCase().includes(search.toLowerCase()));
+    const selectedUserName = users.find(u => u.id === selectedUser)?.name || 'All Users';
+
+    return (
+        <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+                <Button variant="outline" role="combobox" aria-expanded={open} className="w-full sm:w-[200px] justify-between">
+                    <span className="truncate">{selectedUserName}</span>
+                    <UserIcon className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[250px] p-0">
+                <div className="p-2">
+                    <Input placeholder="Search user..." value={search} onChange={e => setSearch(e.target.value)} />
+                </div>
+                <ScrollArea className="h-[200px]">
+                    <div className="p-1">
+                        <Button variant="ghost" className="w-full justify-start" onClick={() => { onUserChange(null); setOpen(false); }}>All Users</Button>
+                        {filteredUsers.map(user => (
+                            <Button key={user.id} variant="ghost" className="w-full justify-start" onClick={() => { onUserChange(user.id); setOpen(false); }}>
+                                {user.name}
+                            </Button>
+                        ))}
+                    </div>
+                </ScrollArea>
+            </PopoverContent>
+        </Popover>
+    );
+}
+
+function DateRangeFilter({ dateRange, onDateChange }: { dateRange: DateRange | undefined, onDateChange: (range: DateRange | undefined) => void }) {
+    return (
+        <Popover>
+            <PopoverTrigger asChild>
+                <Button variant={"outline"} className="w-full sm:w-auto justify-start text-left font-normal">
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {dateRange?.from ? (
+                        dateRange.to ? (
+                            <>
+                                {format(dateRange.from, "LLL dd, y")} - {format(dateRange.to, "LLL dd, y")}
+                            </>
+                        ) : (
+                            format(dateRange.from, "LLL dd, y")
+                        )
+                    ) : (
+                        <span>Pick a date</span>
+                    )}
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                    initialFocus
+                    mode="range"
+                    defaultMonth={dateRange?.from}
+                    selected={dateRange}
+                    onSelect={onDateChange}
+                    numberOfMonths={2}
+                />
+            </PopoverContent>
+        </Popover>
+    );
+}

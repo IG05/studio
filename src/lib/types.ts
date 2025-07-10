@@ -73,7 +73,7 @@ export type AccessRequest = {
 export type AuditLog = {
   id: string;
   timestamp: string; // ISO string
-  eventType: 'ACCESS_REQUEST_DECISION' | 'ROLE_CHANGE' | 'PERMISSIONS_CHANGE' | 'ACCESS_REVOKED';
+  eventType: 'ACCESS_REQUEST_DECISION' | 'ROLE_CHANGE' | 'PERMISSIONS_CHANGE' | 'ACCESS_REVOKED' | 'FILE_UPLOAD' | 'FOLDER_CREATE' | 'OBJECT_DELETE';
   actor: {
     userId: string;
     email: string | null;
@@ -84,14 +84,15 @@ export type AuditLog = {
     userEmail?: string | null;
     bucketName?: string;
     requestId?: string;
+    objectKey?: string;
   };
   details: {
     status?: 'approved' | 'denied' | 'revoked';
     reason?: string;
     fromRole?: 'OWNER' | 'ADMIN' | 'USER';
     toRole?: 'OWNER' | 'ADMIN' | 'USER';
-    // Storing a summary of the permission change for the log
     permissionsChangeSummary?: string;
+    [key: string]: any; // for extra details on file ops
   };
 };
 
