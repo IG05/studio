@@ -108,7 +108,11 @@ export async function POST(
         );
 
         // --- Audit Logging ---
-        const currentPermissions: UserPermissions = currentPermissionsDoc || defaultPermissions;
+        const currentPermissions: UserPermissions = currentPermissionsDoc ? {
+            write: currentPermissionsDoc.write || defaultPermissions.write,
+            canDelete: currentPermissionsDoc.canDelete || defaultPermissions.canDelete,
+        } : defaultPermissions;
+
         const changes: string[] = [];
 
         if (currentPermissions.write.access !== permissions.write.access) {
@@ -116,7 +120,7 @@ export async function POST(
         } else if (permissions.write.access === 'selective') {
              const oldBuckets = new Set(currentPermissions.write.buckets || []);
              const newBuckets = new Set(permissions.write.buckets || []);
-             const added = permissions.write.buckets.filter(b => !oldBuckets.has(b));
+             const added = (permissions.write.buckets || []).filter(b => !oldBuckets.has(b));
              const removed = (currentPermissions.write.buckets || []).filter(b => !newBuckets.has(b));
              if (added.length > 0) changes.push(`Added write access to: ${added.join(', ')}.`);
              if (removed.length > 0) changes.push(`Removed write access from: ${removed.join(', ')}.`);
