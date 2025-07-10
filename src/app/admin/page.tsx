@@ -17,7 +17,7 @@ import { Header } from '@/components/header';
 import type { AccessRequest, AppUser, AuditLog, Bucket } from '@/lib/types';
 import { format, parseISO, formatDistanceToNow } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
-import { CheckCircle, XCircle, MoreVertical, ShieldCheck, User as UserIcon, Check, KeyRound, Crown, Search, FileCheck, UserCog, Eye, HardDrive, ShieldOff, Slash } from 'lucide-react';
+import { CheckCircle, XCircle, MoreVertical, ShieldCheck, User as UserIcon, Check, KeyRound, Crown, Search, FileCheck, UserCog, Eye, HardDrive, ShieldOff, Slash, UserRoundCheck } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -47,6 +47,7 @@ import {
   } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { RevokeAccessDialog } from '@/components/revoke-access-dialog';
+import { UserAccessDetailsDialog } from '@/components/user-access-details-dialog';
 
 export default function AdminPage() {
   const [requests, setRequests] = React.useState<AccessRequest[]>([]);
@@ -64,6 +65,7 @@ export default function AdminPage() {
   const [userSearchQuery, setUserSearchQuery] = React.useState('');
   const [logFilter, setLogFilter] = React.useState('all');
   const [viewingRequest, setViewingRequest] = React.useState<AccessRequest | null>(null);
+  const [viewingUserAccess, setViewingUserAccess] = React.useState<AppUser | null>(null);
   const [isDialogLoading, setIsDialogLoading] = React.useState(false);
 
   const fetchAllData = React.useCallback(async () => {
@@ -241,6 +243,10 @@ export default function AdminPage() {
         onOpenChange={(isOpen) => !isOpen && setPermissionUser(null)}
         onPermissionsChanged={handlePermissionsChange}
        />
+       <UserAccessDetailsDialog
+         user={viewingUserAccess}
+         onOpenChange={(isOpen) => !isOpen && setViewingUserAccess(null)}
+       />
       <div className="flex flex-col h-full w-full">
         <Header title="Admin Dashboard" />
           <div className="p-4 md:p-6 flex-1 overflow-y-auto">
@@ -293,7 +299,7 @@ export default function AdminPage() {
                         <Input placeholder="Search by name or email..." className="pl-9" value={userSearchQuery} onChange={(e) => setUserSearchQuery(e.target.value)} />
                       </div>
                     </div>
-                      <UsersTable users={filteredUsers} onRoleChange={(user, role) => setRoleChangeCandidate({ user, role })} onAssignBuckets={setPermissionUser} isLoading={isLoading} />
+                      <UsersTable users={filteredUsers} onRoleChange={(user, role) => setRoleChangeCandidate({ user, role })} onAssignBuckets={setPermissionUser} onUserClick={setViewingUserAccess} isLoading={isLoading} />
                   </TabsContent>
                   <TabsContent value="logs" className="mt-4">
                       <div className="flex justify-end mb-4">
@@ -527,7 +533,7 @@ const LogsTable = ({ logs, isLoading, onViewDetails }: { logs: AuditLog[], isLoa
     );
 };
 
-const UsersTable = ({ users, onRoleChange, onAssignBuckets, isLoading }: { users: AppUser[], onRoleChange: (user: AppUser, role: 'ADMIN' | 'USER') => void, onAssignBuckets: (user: AppUser) => void, isLoading: boolean }) => {
+const UsersTable = ({ users, onRoleChange, onAssignBuckets, onUserClick, isLoading }: { users: AppUser[], onRoleChange: (user: AppUser, role: 'ADMIN' | 'USER') => void, onAssignBuckets: (user: AppUser) => void, onUserClick: (user: AppUser) => void, isLoading: boolean }) => {
     const { data: session } = useSession();
     const isOwner = session?.user?.role === 'owner';
     const currentUserRole = session?.user?.role;
@@ -551,8 +557,10 @@ const UsersTable = ({ users, onRoleChange, onAssignBuckets, isLoading }: { users
                         <TableRow key={user.id}>
                             <TableCell>
                                 <div className="flex items-center gap-3">
-                                <Avatar><AvatarImage src={user.image || ''} alt={user.name || ''} /><AvatarFallback>{user.name?.charAt(0)}</AvatarFallback></Avatar>
-                                <div><div className="font-medium">{user.name}</div><div className="text-sm text-muted-foreground">{user.email}</div></div>
+                                <button className="flex items-center gap-3 text-left hover:underline" onClick={() => onUserClick(user)}>
+                                    <Avatar><AvatarImage src={user.image || ''} alt={user.name || ''} /><AvatarFallback>{user.name?.charAt(0)}</AvatarFallback></Avatar>
+                                    <div><div className="font-medium">{user.name}</div><div className="text-sm text-muted-foreground">{user.email}</div></div>
+                                </button>
                                 </div>
                             </TableCell>
                             <TableCell>
@@ -569,6 +577,9 @@ const UsersTable = ({ users, onRoleChange, onAssignBuckets, isLoading }: { users
                                         </Button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent>
+                                        <DropdownMenuItem onSelect={() => onUserClick(user)}>
+                                            <UserRoundCheck className="mr-2 h-4 w-4" /> View Permissions
+                                        </DropdownMenuItem>
                                         {isOwner && (
                                             <>
                                                 <DropdownMenuItem onClick={() => onRoleChange(user, 'ADMIN')} disabled={user.role === 'ADMIN'}>
@@ -592,5 +603,3 @@ const UsersTable = ({ users, onRoleChange, onAssignBuckets, isLoading }: { users
         </div>
     )
 };
-
-    
