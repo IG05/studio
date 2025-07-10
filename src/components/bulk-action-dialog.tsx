@@ -25,7 +25,7 @@ const bulkActionSchema = z.object({
 type BulkActionFormValues = z.infer<typeof bulkActionSchema>;
 
 interface BulkActionDialogProps {
-  action: 'approve' | 'deny' | null;
+  action: 'approved' | 'denied' | null;
   requestCount: number;
   onOpenChange: (isOpen: boolean) => void;
   onConfirm: (reason: string) => void;
@@ -33,7 +33,7 @@ interface BulkActionDialogProps {
 
 export function BulkActionDialog({ action, requestCount, onOpenChange, onConfirm }: BulkActionDialogProps) {
   const isOpen = !!action;
-  const isApproving = action === 'approve';
+  const isApproving = action === 'approved';
 
   const form = useForm<BulkActionFormValues>({
     resolver: zodResolver(bulkActionSchema),
@@ -58,17 +58,21 @@ export function BulkActionDialog({ action, requestCount, onOpenChange, onConfirm
   };
 
   if (!action) return null;
+  
+  const actionText = isApproving ? 'approve' : 'deny';
+  const ActionIcon = isApproving ? CheckCircle : XCircle;
+  const iconColor = isApproving ? 'text-green-500' : 'text-red-500';
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            {isApproving ? <CheckCircle className="text-green-500" /> : <XCircle className="text-red-500" />}
-            Bulk {isApproving ? 'Approve' : 'Deny'} Requests
+          <DialogTitle className="flex items-center gap-2 capitalize">
+            <ActionIcon className={iconColor} />
+            Bulk {actionText} Requests
           </DialogTitle>
             <DialogDescription>
-              You are about to {action} <strong>{requestCount}</strong> access request(s). Provide a single reason that will be applied to all of them. This action is irreversible.
+              You are about to {actionText} <strong>{requestCount}</strong> access request(s). Provide a single reason that will be applied to all of them. This action is irreversible.
             </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -78,7 +82,7 @@ export function BulkActionDialog({ action, requestCount, onOpenChange, onConfirm
               name="reason"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Reason for {isApproving ? 'Approval' : 'Denial'}</FormLabel>
+                  <FormLabel className="capitalize">Reason for {actionText}</FormLabel>
                   <FormControl>
                     <Textarea placeholder={`e.g., Bulk ${action} for end-of-day cleanup...`} {...field} />
                   </FormControl>
@@ -90,7 +94,7 @@ export function BulkActionDialog({ action, requestCount, onOpenChange, onConfirm
                 <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>Cancel</Button>
                 <Button type="submit" variant={isApproving ? 'default' : 'destructive'} disabled={!form.formState.isValid || isSubmitting}>
                     {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Confirm {action}
+                    <span className="capitalize">Confirm {actionText}</span>
                 </Button>
             </DialogFooter>
           </form>
