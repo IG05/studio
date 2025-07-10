@@ -13,7 +13,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import type { AppUser, AllUserPermissions, S3CommanderUser } from '@/lib/types';
 import { toast } from '@/hooks/use-toast';
-import { Loader2, KeyRound, Timer, ShieldCheck, HardDrive, Info, Edit, Trash2, Globe, CheckCircle, XCircle, UserCog } from 'lucide-react';
+import { Loader2, KeyRound, Timer, ShieldCheck, HardDrive, Info, Edit, Trash2, Globe, CheckCircle, XCircle, UserCog, User as UserIcon } from 'lucide-react';
 import { format, parseISO, formatDistanceToNow } from 'date-fns';
 import { Button } from './ui/button';
 import { Separator } from './ui/separator';
@@ -181,12 +181,12 @@ export function UserAccessDetailsDialog({ user, currentUser, onOpenChange, onRol
             </p>
             {user.role === 'USER' && (
                 <Button variant="outline" onClick={() => onRoleChange(user, 'ADMIN')}>
-                    <ShieldCheck className="mr-2 h-4 w-4" /> Promote to Admin
+                    <ShieldCheck className="mr-2 h-4 w-4" /> Make Admin
                 </Button>
             )}
             {user.role === 'ADMIN' && (
                  <Button variant="destructive" onClick={() => onRoleChange(user, 'USER')}>
-                    <UserIcon className="mr-2 h-4 w-4" /> Demote to User
+                    <UserIcon className="mr-2 h-4 w-4" /> Make User
                 </Button>
             )}
         </DialogFooter>
