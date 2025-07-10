@@ -144,7 +144,7 @@ export async function GET(request: NextRequest) {
                 access = 'read-write';
             } else if (tempWritePermission) {
                 access = 'read-write';
-                tempAccessExpiresAt = tempWritePermission.expiresAt?.toString();
+                tempAccessExpiresAt = tempWritePermission.expiresAt?.toISOString();
             }
 
             return {
