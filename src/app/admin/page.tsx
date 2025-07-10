@@ -22,7 +22,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuTrigger,
   DropdownMenuCheckboxItem,
   DropdownMenuLabel,
   DropdownMenuSeparator
@@ -153,16 +152,16 @@ export default function AdminPage() {
     setIsLogsLoading(true);
     try {
       const params = new URLSearchParams();
-      if (activeFilterInputs.eventType && appliedLogFilters.eventTypes.length > 0) {
+      if (appliedLogFilters.eventTypes.length > 0) {
         params.append('eventTypes', appliedLogFilters.eventTypes.join(','));
       }
-      if (activeFilterInputs.user && appliedLogFilters.userId) {
+      if (appliedLogFilters.userId) {
         params.append('userId', appliedLogFilters.userId);
       }
-      if (activeFilterInputs.date && appliedLogFilters.dateRange?.from) {
+      if (appliedLogFilters.dateRange?.from) {
         params.append('startDate', appliedLogFilters.dateRange.from.toISOString());
       }
-      if (activeFilterInputs.date && appliedLogFilters.dateRange?.to) {
+      if (appliedLogFilters.dateRange?.to) {
         params.append('endDate', appliedLogFilters.dateRange.to.toISOString());
       }
       if (appliedLogFilters.searchQuery) {
@@ -182,7 +181,7 @@ export default function AdminPage() {
     } finally {
         setIsLogsLoading(false);
     }
-  }, [appliedLogFilters, activeFilterInputs]);
+  }, [appliedLogFilters]);
 
   React.useEffect(() => {
     fetchNonLogData();
@@ -209,7 +208,7 @@ export default function AdminPage() {
             description: `The access request has been successfully ${status}.`,
         });
         fetchNonLogData(); // Refetch all data to ensure consistency
-        handleApplyFilters(); // refetch logs with current filters
+        fetchLogs(); // refetch logs with current filters
     })
     .catch(async (err) => {
         const error = await err;
@@ -254,7 +253,7 @@ export default function AdminPage() {
             description: `User role has been successfully changed to ${role}.`,
         });
         fetchNonLogData(); // Refetch all data
-        handleApplyFilters();
+        fetchLogs();
         setViewingUserAccess(null); // Close the dialog
     })
     .catch(async (err) => {
@@ -269,12 +268,13 @@ export default function AdminPage() {
 
   const handlePermissionsChange = () => {
     fetchNonLogData();
-    handleApplyFilters();
+    fetchLogs();
   };
   
   const handleClearFilters = () => {
     setActiveFilterInputs({ eventType: false, user: false, date: false });
     setStagedLogFilters(defaultLogFilters);
+    // Apply immediately
     setAppliedLogFilters(defaultLogFilters);
   };
   
@@ -332,7 +332,7 @@ export default function AdminPage() {
        />
        <AssignBucketsDialog
         user={permissionUser}
-        onOpencha./nge={(isOpen) => !isOpen && setPermissionUser(null)}
+        onOpenChange={(isOpen) => !isOpen && setPermissionUser(null)}
         onPermissionsChanged={handlePermissionsChange}
        />
        <UserAccessDetailsDialog
@@ -400,8 +400,8 @@ export default function AdminPage() {
                       <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-4">
                          <div className="flex flex-wrap items-center gap-2">
                             <AddFilterMenu onFilterSelect={(filter) => setActiveFilterInputs(f => ({...f, [filter]: true}))} />
-                            {activeFilterInputs.user && <UserFilter users={users} selectedUser={stagedLogFilters.userId} onUserChange={(userId) => setStagedLogFilters(f => ({...f, userId}))} />}
                             {activeFilterInputs.eventType && <EventTypeFilter selectedTypes={stagedLogFilters.eventTypes} onTypeChange={(types) => setStagedLogFilters(f => ({...f, eventTypes: types}))} />}
+                            {activeFilterInputs.user && <UserFilter users={users} selectedUser={stagedLogFilters.userId} onUserChange={(userId) => setStagedLogFilters(f => ({...f, userId}))} />}
                             {activeFilterInputs.date && <DateRangeFilter dateRange={stagedLogFilters.dateRange} onDateChange={(range) => setStagedLogFilters(f => ({...f, dateRange: range}))} />}
                             {isAnyFilterInputActive && (
                                 <Button variant="ghost" onClick={handleClearFilters} className="text-muted-foreground hover:text-foreground">
@@ -418,6 +418,7 @@ export default function AdminPage() {
                                         className="pl-9" 
                                         value={stagedLogFilters.searchQuery} 
                                         onChange={(e) => setStagedLogFilters(f => ({...f, searchQuery: e.target.value}))} 
+                                        onKeyDown={(e) => { if (e.key === 'Enter') handleApplyFilters() }}
                                     />
                                 </div>
                             </div>
