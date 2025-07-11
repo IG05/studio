@@ -17,7 +17,7 @@ import { Header } from '@/components/header';
 import type { AccessRequest, AppUser, AuditLog, Bucket } from '@/lib/types';
 import { format, parseISO, formatDistanceToNow, subDays } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
-import { CheckCircle, XCircle, MoreVertical, ShieldCheck, User as UserIcon, Check, KeyRound, Crown, Search, FileCheck, UserCog, Eye, HardDrive, ShieldOff, Slash, UserRoundCheck, FileUp, FolderPlus, Trash2, CalendarIcon, Filter, FilterX, Plus, Download, Info } from 'lucide-react';
+import { CheckCircle, XCircle, MoreVertical, ShieldCheck, User as UserIcon, Check, KeyRound, Crown, Search, FileCheck, UserCog, Eye, HardDrive, ShieldOff, Slash, UserRoundCheck, FileUp, FolderPlus, Trash2, CalendarIcon, Filter, FilterX, Plus, Download, Info, Loader2 } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,7 +35,6 @@ import {
   } from "@/components/ui/tabs";
 import { Skeleton } from '@/components/ui/skeleton';
 import { DenyRequestDialog } from '@/components/deny-request-dialog';
-import { ApproveRequestDialog } from '@/components/approve-request-dialog';
 import { ChangeRoleDialog } from '@/components/change-role-dialog';
 import { useSession } from 'next-auth/react';
 import { AssignBucketsDialog } from '@/components/assign-buckets-dialog';
@@ -52,6 +51,17 @@ import { cn } from '@/lib/utils';
 import { isEqual } from 'lodash';
 import { Checkbox } from '@/components/ui/checkbox';
 import { BulkActionDialog } from '@/components/bulk-action-dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 const ALL_EVENT_TYPES: AuditLog['eventType'][] = [
     'ACCESS_REQUEST_DECISION',
@@ -90,7 +100,6 @@ export default function AdminPage() {
   const [isLoading, setIsLoading] = React.useState(true);
   const [activeTab, setActiveTab] = React.useState('pending');
   const [denialCandidate, setDenialCandidate] = React.useState<AccessRequest | null>(null);
-  const [approvalCandidate, setApprovalCandidate] = React.useState<AccessRequest | null>(null);
   const [revocationCandidate, setRevocationCandidate] = React.useState<AccessRequest | null>(null);
   const [roleChangeCandidate, setRoleChangeCandidate] = React.useState<{ user: AppUser; role: 'ADMIN' | 'USER' } | null>(null);
   const [permissionUser, setPermissionUser] = React.useState<AppUser | null>(null);
@@ -106,7 +115,8 @@ export default function AdminPage() {
   });
   
   const [selectedRequestIds, setSelectedRequestIds] = React.useState<string[]>([]);
-  const [bulkAction, setBulkAction] = React.useState<'approved' | 'denied' | null>(null);
+  const [bulkAction, setBulkAction] = React.useState<'denied' | null>(null);
+  const [isBulkApproving, setIsBulkApproving] = React.useState(false);
 
   const [viewingRequest, setViewingRequest] = React.useState<AccessRequest | null>(null);
   const [viewingUserAccess, setViewingUserAccess] = React.useState<AppUser | null>(null);
@@ -200,7 +210,7 @@ export default function AdminPage() {
   }, [fetchLogs]);
 
 
-  const handleRequest = (requestId: string, status: 'approved' | 'denied' | 'revoked', reason: string) => {
+  const handleRequest = (requestId: string, status: 'approved' | 'denied' | 'revoked', reason?: string) => {
     fetch(`/api/access-requests/${requestId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -228,7 +238,10 @@ export default function AdminPage() {
     });
   };
   
-   const handleBulkUpdateRequest = async (requestIds: string[], status: 'approved' | 'denied', reason: string) => {
+   const handleBulkUpdateRequest = async (requestIds: string[], status: 'approved' | 'denied', reason?: string) => {
+    if (status === 'approved') {
+        setIsBulkApproving(true);
+    }
     try {
         const res = await fetch('/api/access-requests/bulk-update', {
             method: 'POST',
@@ -261,7 +274,8 @@ export default function AdminPage() {
         fetchNonLogData();
         fetchLogs();
         setSelectedRequestIds([]); // Clear selection
-        setBulkAction(null); // Close the dialog
+        setBulkAction(null); // Close the dialog if it was open
+        setIsBulkApproving(false);
     }
   };
 
@@ -283,11 +297,11 @@ export default function AdminPage() {
     }
   };
   
-  const handleRoleChangeSubmit = (userId: string, role: string, reason: string) => {
+  const handleRoleChangeSubmit = (userId: string, role: string) => {
     fetch(`/api/users/${userId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role, reason }),
+        body: JSON.stringify({ role }),
     })
     .then(res => {
         if (!res.ok) throw res.json();
@@ -354,11 +368,6 @@ export default function AdminPage() {
         onOpenChange={(isOpen) => !isOpen && setDenialCandidate(null)}
         onConfirm={(reason) => { if(denialCandidate) { handleRequest(denialCandidate.id, 'denied', reason) }}}
        />
-      <ApproveRequestDialog
-        request={approvalCandidate}
-        onOpenChange={(isOpen) => !isOpen && setApprovalCandidate(null)}
-        onConfirm={(reason) => { if(approvalCandidate) { handleRequest(approvalCandidate.id, 'approved', reason) }}}
-      />
       <RevokeAccessDialog
         request={revocationCandidate}
         onOpenChange={(isOpen) => !isOpen && setRevocationCandidate(null)}
@@ -367,7 +376,7 @@ export default function AdminPage() {
       <ChangeRoleDialog
         candidate={roleChangeCandidate}
         onOpenChange={(isOpen) => !isOpen && setRoleChangeCandidate(null)}
-        onConfirm={(reason) => { if(roleChangeCandidate) { handleRoleChangeSubmit(roleChangeCandidate.user.id, roleChangeCandidate.role, reason) }}}
+        onConfirm={() => { if(roleChangeCandidate) { handleRoleChangeSubmit(roleChangeCandidate.user.id, roleChangeCandidate.role) }}}
       />
        <RequestDetailsDialog
         request={viewingRequest}
@@ -417,15 +426,34 @@ export default function AdminPage() {
                                     <Button variant="destructive" size="sm" onClick={() => setBulkAction('denied')}>
                                         Deny Selected
                                     </Button>
-                                    <Button variant="default" size="sm" onClick={() => setBulkAction('approved')}>
-                                        Approve Selected
-                                    </Button>
+                                     <AlertDialog>
+                                        <AlertDialogTrigger asChild>
+                                            <Button variant="default" size="sm" disabled={isBulkApproving}>
+                                                {isBulkApproving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                                Approve Selected
+                                            </Button>
+                                        </AlertDialogTrigger>
+                                        <AlertDialogContent>
+                                            <AlertDialogHeader>
+                                                <AlertDialogTitle>Confirm Bulk Approval</AlertDialogTitle>
+                                                <AlertDialogDescription>
+                                                    Are you sure you want to approve {selectedRequestIds.length} request(s)? This action cannot be undone.
+                                                </AlertDialogDescription>
+                                            </AlertDialogHeader>
+                                            <AlertDialogFooter>
+                                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                <AlertDialogAction onClick={() => handleBulkUpdateRequest(selectedRequestIds, 'approved')}>
+                                                    Confirm
+                                                </AlertDialogAction>
+                                            </AlertDialogFooter>
+                                        </AlertDialogContent>
+                                    </AlertDialog>
                                 </div>
                             </div>
                         )}
                       <RequestsTable 
                         requests={pendingRequests} 
-                        handleApprove={setApprovalCandidate} 
+                        handleApprove={(req) => handleRequest(req.id, 'approved')}
                         handleDeny={setDenialCandidate} 
                         isLoading={isLoading}
                         selectedRequestIds={selectedRequestIds}
@@ -613,13 +641,11 @@ const ActivePermissionsTable = ({ requests, handleRevoke, isLoading }: { request
                     </TableCell>
                     <TableCell><div className="font-medium">{req.bucketName}</div><div className="text-sm text-muted-foreground">{req.region}</div></TableCell>
                     <TableCell>
-                       {req.expiresAt ? (
+                       {req.expiresAt && (
                         <>
                             <div className="font-medium">{format(parseISO(req.expiresAt), 'PPp')}</div>
                             <div className="text-sm text-muted-foreground">{formatDistanceToNow(parseISO(req.expiresAt), { addSuffix: true })}</div>
                         </>
-                        ) : (
-                          '--'
                         )}
                     </TableCell>
                     <TableCell>{req.approvedByUserEmail}</TableCell>

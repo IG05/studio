@@ -22,15 +22,13 @@ export async function PATCH(
 
     try {
         const body = await request.json();
-        const { role, reason } = body;
+        const { role, reason: providedReason } = body;
 
         if (role !== 'ADMIN' && role !== 'USER') {
             return NextResponse.json({ error: 'Invalid role provided.' }, { status: 400 });
         }
 
-        if (!reason || typeof reason !== 'string' || reason.length < 10) {
-            return NextResponse.json({ error: 'A reason of at least 10 characters is required.' }, { status: 400 });
-        }
+        const reason = providedReason || `Role changed to ${role} by owner.`;
 
         const { db } = await connectToDatabase();
         const usersCollection = db.collection('users');
@@ -41,9 +39,9 @@ export async function PATCH(
             return NextResponse.json({ error: 'User not found' }, { status: 404 });
         }
 
-        // Admins cannot change their own role
-        if (userToUpdate.uid === session.user.id) {
-            return NextResponse.json({ error: 'Admins cannot change their own role.' }, { status: 400 });
+        // Owner cannot change their own role.
+        if (userToUpdate._id.toString() === session.user.id) {
+            return NextResponse.json({ error: 'Owner cannot change their own role.' }, { status: 400 });
         }
         
         const originalRole = userToUpdate.role;

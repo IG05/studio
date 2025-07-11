@@ -61,14 +61,19 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    const { status, reason } = body;
+    let { status, reason } = body;
 
     if (!['approved', 'denied', 'revoked'].includes(status)) {
         return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
     }
     
-    if (!reason || typeof reason !== 'string' || reason.length < 10) {
-        return NextResponse.json({ error: 'A reason of at least 10 characters is required.' }, { status: 400 });
+    // Reason is only required for denial or revocation.
+    if ((status === 'denied' || status === 'revoked') && (!reason || typeof reason !== 'string' || reason.length < 10)) {
+        return NextResponse.json({ error: 'A reason of at least 10 characters is required for denial or revocation.' }, { status: 400 });
+    }
+
+    if (status === 'approved' && !reason) {
+        reason = "Request approved by administrator.";
     }
 
     try {

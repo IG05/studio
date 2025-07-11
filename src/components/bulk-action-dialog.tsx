@@ -16,7 +16,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, CheckCircle, XCircle } from 'lucide-react';
+import { Loader2, XCircle } from 'lucide-react';
 
 const bulkActionSchema = z.object({
   reason: z.string().min(10, 'Please provide a reason of at least 10 characters.'),
@@ -25,7 +25,7 @@ const bulkActionSchema = z.object({
 type BulkActionFormValues = z.infer<typeof bulkActionSchema>;
 
 interface BulkActionDialogProps {
-  action: 'approved' | 'denied' | null;
+  action: 'denied' | null;
   requestCount: number;
   onOpenChange: (isOpen: boolean) => void;
   onConfirm: (reason: string) => void;
@@ -33,7 +33,6 @@ interface BulkActionDialogProps {
 
 export function BulkActionDialog({ action, requestCount, onOpenChange, onConfirm }: BulkActionDialogProps) {
   const isOpen = !!action;
-  const isApproving = action === 'approved';
 
   const form = useForm<BulkActionFormValues>({
     resolver: zodResolver(bulkActionSchema),
@@ -57,22 +56,18 @@ export function BulkActionDialog({ action, requestCount, onOpenChange, onConfirm
     // The parent component will handle closing the dialog
   };
 
-  if (!action) return null;
-  
-  const actionText = isApproving ? 'approve' : 'deny';
-  const ActionIcon = isApproving ? CheckCircle : XCircle;
-  const iconColor = isApproving ? 'text-green-500' : 'text-red-500';
+  if (action !== 'denied') return null;
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 capitalize">
-            <ActionIcon className={iconColor} />
-            Bulk {actionText} Requests
+            <XCircle className="text-red-500" />
+            Bulk Deny Requests
           </DialogTitle>
             <DialogDescription>
-              You are about to {actionText} <strong>{requestCount}</strong> access request(s). Provide a single reason that will be applied to all of them. This action is irreversible.
+              You are about to deny <strong>{requestCount}</strong> access request(s). Provide a single reason that will be applied to all of them. This action is irreversible.
             </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -82,9 +77,9 @@ export function BulkActionDialog({ action, requestCount, onOpenChange, onConfirm
               name="reason"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="capitalize">Reason for {actionText}</FormLabel>
+                  <FormLabel>Reason for Denial</FormLabel>
                   <FormControl>
-                    <Textarea placeholder={`e.g., Bulk ${action} for end-of-day cleanup...`} {...field} />
+                    <Textarea placeholder="e.g., Bulk denial for end-of-day cleanup..." {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -92,9 +87,9 @@ export function BulkActionDialog({ action, requestCount, onOpenChange, onConfirm
             />
             <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>Cancel</Button>
-                <Button type="submit" variant={isApproving ? 'default' : 'destructive'} disabled={!form.formState.isValid || isSubmitting}>
+                <Button type="submit" variant="destructive" disabled={!form.formState.isValid || isSubmitting}>
                     {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    <span className="capitalize">Confirm {actionText}</span>
+                    Confirm Denial
                 </Button>
             </DialogFooter>
           </form>

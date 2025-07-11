@@ -20,7 +20,6 @@ import type { AppUser, Bucket, Region, UserPermissions } from '@/lib/types';
 import { Loader2, ShieldCheck, Search, HardDrive, Trash2, Edit } from 'lucide-react';
 import { ScrollArea } from './ui/scroll-area';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from './ui/form';
-import { Textarea } from './ui/textarea';
 import { Input } from './ui/input';
 import {
     Select,
@@ -36,7 +35,6 @@ import { cn } from '@/lib/utils';
 
 
 const permissionsSchema = z.object({
-  reason: z.string().min(10, 'Please provide a reason of at least 10 characters.'),
   write: z.object({
       access: z.enum(['none', 'all', 'selective']),
       buckets: z.array(z.string()),
@@ -61,7 +59,6 @@ interface AssignBucketsDialogProps {
 }
 
 const defaultValues: PermissionsFormValues = {
-    reason: '',
     write: { access: 'none', buckets: [] },
     canDelete: false
 };
@@ -97,7 +94,6 @@ export function AssignBucketsDialog({ user, onOpenChange, onPermissionsChanged }
         setRegions(Array.isArray(regionsData) ? regionsData : []);
         if (permissionsData) {
             form.reset({
-                reason: '',
                 write: permissionsData.write || defaultValues.write,
                 canDelete: permissionsData.canDelete || defaultValues.canDelete,
             });
@@ -118,7 +114,7 @@ export function AssignBucketsDialog({ user, onOpenChange, onPermissionsChanged }
       const response = await fetch(`/api/users/${user.id}/permissions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ permissions: values, reason: values.reason }),
+        body: JSON.stringify({ permissions: values }),
       });
       if (!response.ok) {
         const errorData = await response.json();
@@ -155,7 +151,7 @@ export function AssignBucketsDialog({ user, onOpenChange, onPermissionsChanged }
           <DialogTitle className="flex items-center gap-2"><ShieldCheck /> Assign Permanent Permissions</DialogTitle>
           {user && (
             <DialogDescription>
-              Set permanent Write and Delete permissions for <strong>{user.name}</strong>. Read access to all buckets is default.
+              Set permanent Write and Delete permissions for <strong>{user.name}</strong>. Read access to all buckets is default. Changes will be logged.
             </DialogDescription>
           )}
         </DialogHeader>
@@ -278,21 +274,6 @@ export function AssignBucketsDialog({ user, onOpenChange, onPermissionsChanged }
                             )}
                         />
                     </div>
-
-                    {/* REASON FOR CHANGE */}
-                    <FormField
-                        control={form.control}
-                        name="reason"
-                        render={({ field }) => (
-                        <FormItem>
-                            <FormLabel>Reason for Change (Required)</FormLabel>
-                            <FormControl>
-                                <Textarea placeholder="e.g., Granting access for new project responsibilities." {...field} />
-                            </FormControl>
-                            <FormMessage />
-                        </FormItem>
-                        )}
-                    />
                 </form>
             </Form>
             )}
@@ -311,5 +292,3 @@ export function AssignBucketsDialog({ user, onOpenChange, onPermissionsChanged }
     </Dialog>
   );
 }
-
-    

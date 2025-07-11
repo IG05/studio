@@ -56,7 +56,7 @@ export async function POST(
     }
 
     const { id: userId } = params;
-    const { permissions, reason } = await request.json() as { permissions: UserPermissions, reason: string };
+    let { permissions, reason } = await request.json() as { permissions: UserPermissions, reason?: string };
 
     if (!permissions || !permissions.write || !['all', 'selective', 'none'].includes(permissions.write.access)) {
         return NextResponse.json({ error: 'Invalid payload, invalid write access structure.' }, { status: 400 });
@@ -70,8 +70,8 @@ export async function POST(
         return NextResponse.json({ error: 'Invalid payload, canDelete must be a boolean.' }, { status: 400 });
     }
 
-    if (!reason || typeof reason !== 'string' || reason.length < 10) {
-        return NextResponse.json({ error: 'A reason of at least 10 characters is required.' }, { status: 400 });
+    if (!reason) {
+        reason = "Permissions updated by administrator.";
     }
     
     // If access is not 'selective', ensure buckets array is empty for consistency.

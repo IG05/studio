@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const { requestIds, status, reason } = await request.json();
+    let { requestIds, status, reason } = await request.json();
 
     if (!Array.isArray(requestIds) || requestIds.length === 0) {
         return NextResponse.json({ error: 'Request IDs must be a non-empty array' }, { status: 400 });
@@ -20,8 +20,12 @@ export async function POST(request: NextRequest) {
     if (!['approved', 'denied'].includes(status)) {
         return NextResponse.json({ error: 'Invalid status provided' }, { status: 400 });
     }
-    if (!reason || typeof reason !== 'string' || reason.length < 10) {
-        return NextResponse.json({ error: 'A reason of at least 10 characters is required.' }, { status: 400 });
+    if (status === 'denied' && (!reason || typeof reason !== 'string' || reason.length < 10)) {
+        return NextResponse.json({ error: 'A reason of at least 10 characters is required for denial.' }, { status: 400 });
+    }
+
+    if (status === 'approved' && !reason) {
+        reason = "Request approved by administrator in bulk.";
     }
 
     const objectIds = requestIds.map(toObjectId).filter(id => id !== null) as import('mongodb').ObjectId[];
@@ -37,7 +41,11 @@ export async function POST(request: NextRequest) {
         const requestsToUpdate = await accessRequestsCollection.find({ _id: { $in: objectIds }, status: 'pending' }).toArray();
 
         if (requestsToUpdate.length === 0) {
-            return NextResponse.json({ error: 'No pending requests found for the given IDs.' }, { status: 404 });
+            return NextResponse.json({
+                successCount: 0,
+                errorCount: 0,
+                message: 'No pending requests found for the given IDs.'
+            });
         }
 
         let successCount = 0;
