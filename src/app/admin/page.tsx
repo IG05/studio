@@ -115,7 +115,7 @@ export default function AdminPage() {
   });
   
   const [selectedRequestIds, setSelectedRequestIds] = React.useState<string[]>([]);
-  const [bulkAction, setBulkAction] = React.useState<'denied' | null>(null);
+  const [bulkAction, setBulkAction] = React.useState<'approved' | 'denied' | null>(null);
   const [isBulkApproving, setIsBulkApproving] = React.useState(false);
 
   const [viewingRequest, setViewingRequest] = React.useState<AccessRequest | null>(null);
@@ -426,28 +426,10 @@ export default function AdminPage() {
                                     <Button variant="destructive" size="sm" onClick={() => setBulkAction('denied')}>
                                         Deny Selected
                                     </Button>
-                                     <AlertDialog>
-                                        <AlertDialogTrigger asChild>
-                                            <Button variant="default" size="sm" disabled={isBulkApproving}>
-                                                {isBulkApproving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                                Approve Selected
-                                            </Button>
-                                        </AlertDialogTrigger>
-                                        <AlertDialogContent>
-                                            <AlertDialogHeader>
-                                                <AlertDialogTitle>Confirm Bulk Approval</AlertDialogTitle>
-                                                <AlertDialogDescription>
-                                                    Are you sure you want to approve {selectedRequestIds.length} request(s)? This action cannot be undone.
-                                                </AlertDialogDescription>
-                                            </AlertDialogHeader>
-                                            <AlertDialogFooter>
-                                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                <AlertDialogAction onClick={() => handleBulkUpdateRequest(selectedRequestIds, 'approved')}>
-                                                    Confirm
-                                                </AlertDialogAction>
-                                            </AlertDialogFooter>
-                                        </AlertDialogContent>
-                                    </AlertDialog>
+                                    <Button variant="default" size="sm" disabled={isBulkApproving} onClick={() => handleBulkUpdateRequest(selectedRequestIds, 'approved')}>
+                                        {isBulkApproving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                        Approve Selected
+                                    </Button>
                                 </div>
                             </div>
                         )}
