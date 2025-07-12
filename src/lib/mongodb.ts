@@ -11,6 +11,7 @@ export async function connectToDatabase() {
   const MONGODB_PASSWORD = process.env.MONGODB_PASSWORD;
   const MONGODB_HOST = process.env.MONGODB_HOST;
   const MONGODB_DB_NAME = process.env.MONGODB_DB_NAME;
+  const MONGODB_URI = process.env.MONGODB_URI as string;
 
   if (!MONGODB_USER || !MONGODB_PASSWORD || !MONGODB_HOST || !MONGODB_DB_NAME) {
     throw new Error(
@@ -19,7 +20,7 @@ export async function connectToDatabase() {
   }
 
   // Construct the URI, ensuring the password and user are properly encoded
-  const MONGODB_URI = `mongodb+srv://${encodeURIComponent(MONGODB_USER)}:${encodeURIComponent(MONGODB_PASSWORD)}@${MONGODB_HOST}/?retryWrites=true&w=majority&appName=Cluster0`;
+  // const MONGODB_URI = `mongodb+srv://${encodeURIComponent(MONGODB_USER)}:${encodeURIComponent(MONGODB_PASSWORD)}@${MONGODB_HOST}/?retryWrites=true&w=majority&appName=Cluster0`;
 
   if (cachedClient && cachedDb) {
     return { client: cachedClient, db: cachedDb };
